@@ -1,4 +1,79 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# eMenu Waiter App
+
+React Native (bare) application for waiters to manage restaurant orders.
+
+## Architecture
+```
+Login (Cognito) → Get FCM Token → Upload to Backend
+                     ↓
+Customer Orders → Backend → FCM Push → Waiter App
+                     ↓
+Confirm Order → Print Receipt → Update Status
+```
+
+## Features
+- ✅ Cognito authentication (custom UI)
+- ✅ Firebase Cloud Messaging (push notifications)
+- ✅ Apollo GraphQL client
+- ✅ Orders management (pending orders list)
+- ✅ Order confirmation flow
+- 🔲 Thermal printer integration (TODO)
+- 🔲 Menu browsing & checkout (TODO)
+
+## Setup Instructions
+
+### 1. Install Dependencies
+```bash
+npm install
+```
+
+### 2. Configure AWS (Required)
+Update `/src/config/aws-config.js` with your AWS credentials:
+- `region`: Your AWS region
+- `userPoolId`: Cognito User Pool ID
+- `userPoolWebClientId`: Cognito App Client ID
+- `GRAPHQL_CONFIG.endpoint`: AppSync GraphQL endpoint
+
+### 3. Setup Firebase Cloud Messaging
+
+#### iOS
+1. Create a Firebase project at https://console.firebase.google.com
+2. Add iOS app to Firebase project
+3. Download `GoogleService-Info.plist`
+4. Place it in `/ios/eMenuApp/`
+5. Install pods:
+```bash
+cd ios
+pod install
+cd ..
+```
+
+#### Android
+1. Add Android app to Firebase project
+2. Download `google-services.json`
+3. Place it in `/android/app/`
+
+### 4. Run the App
+
+#### iOS
+```bash
+npx react-native run-ios
+```
+
+#### Android
+```bash
+npx react-native run-android
+```
+
+## TODO
+- [ ] Add FCM token update mutation in backend GraphQL schema
+- [ ] Implement updateFCMToken mutation in backend
+- [ ] Add thermal printer library integration
+- [ ] Port menu browsing & checkout from whatsmenu
+- [ ] Add splash screen
+- [ ] Add logout functionality
+
+---
 
 # Getting Started
 
