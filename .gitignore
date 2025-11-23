@@ -73,3 +73,17 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+
+# iOS
+ios/Podfile.lock
+ios/eMenuApp.xcworkspace/
+ios/Pods/
+ios/GoogleService-Info.plist
+
+# Xcode
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Firebase
+**/GoogleService-Info.plist

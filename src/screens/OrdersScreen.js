@@ -8,111 +8,94 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
-import {useQuery, useMutation} from '@apollo/client';
-import {LIST_ORDERS} from '../graphql/queries';
-import {UPDATE_ORDER_STATUS} from '../graphql/mutations';
-import FCMService from '../services/FCMService';
+import {gql} from 'graphql-request';
+import GraphQLClient from '../services/GraphQLClient';
+
+// GraphQL query for pending orders
+const LIST_ORDERS = gql`
+  query ListOrders($status: String!) {
+    listOrders(status: $status) {
+      id
+      tableNumber
+      items {
+        name
+        quantity
+        notes
+      }
+      totalAmount
+      status
+      createdAt
+    }
+  }
+`;
 
 const OrdersScreen = () => {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Query pending orders
-  const {data, loading, refetch} = useQuery(LIST_ORDERS, {
-    variables: {status: 'PENDING'},
-    pollInterval: 30000, // Fallback polling every 30s
-  });
-
-  const [updateOrderStatus] = useMutation(UPDATE_ORDER_STATUS);
-
-  // Setup FCM listener for new orders
+  // Fetch orders on mount
   useEffect(() => {
-    const unsubscribe = FCMService.onMessageReceived(message => {
-      console.log('📩 New order notification:', message);
-      // Refetch orders when notification received
-      refetch();
-      
-      // Show alert
-      if (message.notification) {
-        Alert.alert(
-          message.notification.title || '新订单',
-          message.notification.body || '有新的订单需要确认',
-        );
-      }
-    });
+    fetchOrders();
+  }, []);
 
-    return unsubscribe;
-  }, [refetch]);
-
-  const handleConfirmOrder = async orderId => {
+  const fetchOrders = async () => {
     try {
-      await updateOrderStatus({
-        variables: {
-          orderId,
-          status: 'CONFIRMED',
-        },
+      setError(null);
+      const data = await GraphQLClient.request(LIST_ORDERS, {
+        status: 'PENDING',
       });
-
-      Alert.alert('成功', '订单已确认，准备打印小票');
-      // TODO: Trigger printer
-      refetch();
-    } catch (error) {
-      console.error('Confirm order error:', error);
-      Alert.alert('错误', '确认订单失败，请重试');
+      
+      console.log('✅ Orders fetched:', data);
+      setOrders(data.listOrders || []);
+    } catch (err) {
+      console.error('❌ Failed to fetch orders:', err);
+      setError(err.message || '获取订单失败');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleRefresh = async () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    await refetch();
+    await fetchOrders();
     setRefreshing(false);
   };
-
-  const renderOrderItem = ({item}) => (
-    <View style={styles.orderCard}>
-      <View style={styles.orderHeader}>
-        <Text style={styles.tableNumber}>桌号: {item.tableNumber}</Text>
-        <Text style={styles.orderTime}>
-          {new Date(item.createdAt).toLocaleTimeString('zh-CN')}
-        </Text>
-      </View>
-
-      <View style={styles.itemsList}>
-        {item.items.map((dish, index) => (
-          <Text key={index} style={styles.dishItem}>
-            {dish.name} x{dish.quantity}
-            {dish.notes ? ` (${dish.notes})` : ''}
-          </Text>
-        ))}
-      </View>
-
-      <View style={styles.orderFooter}>
-        <Text style={styles.totalAmount}>
-          总计: ¥{(item.totalAmount / 100).toFixed(2)}
-        </Text>
-        <TouchableOpacity
-          style={styles.confirmButton}
-          onPress={() => handleConfirmOrder(item.id)}>
-          <Text style={styles.confirmButtonText}>确认订单</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>待处理订单</Text>
       
+      {error && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>⚠️ {error}</Text>
+          <TouchableOpacity onPress={fetchOrders} style={styles.retryButton}>
+            <Text style={styles.retryText}>重试</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      
       <FlatList
-        data={data?.listOrders || []}
-        renderItem={renderOrderItem}
-        keyExtractor={item => item.id}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
+        data={orders}
+        renderItem={() => null}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>
-            {loading ? '加载中...' : '暂无待处理订单'}
-          </Text>
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>
+              {loading ? '⏳' : '🎉'}
+            </Text>
+            <Text style={styles.emptyTitle}>
+              {loading ? '正在获取订单...' : '暂无订单'}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {loading 
+                ? '使用 graphql-request 查询中' 
+                : '当有新订单时，会在这里显示'}
+            </Text>
+          </View>
+        }
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       />
     </View>
@@ -127,75 +110,57 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    padding: 20,
+    padding: 16,
     backgroundColor: '#fff',
-  },
-  orderCard: {
-    backgroundColor: '#fff',
-    margin: 10,
-    padding: 15,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  orderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-    paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#e0e0e0',
   },
-  tableNumber: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 100,
+  },
+  emptyText: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
     color: '#333',
+    marginBottom: 8,
   },
-  orderTime: {
+  emptySubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: '#999',
   },
-  itemsList: {
-    marginVertical: 10,
-  },
-  dishItem: {
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 5,
-  },
-  orderFooter: {
+  errorBanner: {
+    backgroundColor: '#ffebee',
+    padding: 15,
+    margin: 10,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#f44336',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
   },
-  totalAmount: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+  errorText: {
+    color: '#c62828',
+    fontSize: 14,
+    flex: 1,
   },
-  confirmButton: {
-    backgroundColor: '#34C759',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 6,
+  retryButton: {
+    backgroundColor: '#f44336',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
   },
-  confirmButtonText: {
+  retryText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 50,
-    fontSize: 16,
-    color: '#999',
   },
 });
 

@@ -1,122 +1,120 @@
-import {
-  CognitoUserPool,
-  CognitoUser,
-  AuthenticationDetails,
-} from 'amazon-cognito-identity-js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {AWS_CONFIG} from '../config/aws-config';
-
-const userPool = new CognitoUserPool({
-  UserPoolId: AWS_CONFIG.userPoolId,
-  ClientId: AWS_CONFIG.userPoolWebClientId,
-});
+/**
+ * Authentication Service using AWS Amplify Auth
+ * 
+ * Amplify v6 handles all the complexity:
+ * - Automatic token storage and refresh
+ * - Session management
+ * - No manual polyfills needed
+ */
+import {signIn, signOut, getCurrentUser, fetchAuthSession} from 'aws-amplify/auth';
 
 class AuthService {
-  // Sign in with email and password
+  /**
+   * Sign in with email and password
+   */
   async signIn(email, password) {
-    return new Promise((resolve, reject) => {
-      const user = new CognitoUser({
-        Username: email,
-        Pool: userPool,
-      });
-
-      const authDetails = new AuthenticationDetails({
-        Username: email,
-        Password: password,
-      });
-
-      user.authenticateUser(authDetails, {
-        onSuccess: async result => {
-          const idToken = result.getIdToken().getJwtToken();
-          const accessToken = result.getAccessToken().getJwtToken();
-          const refreshToken = result.getRefreshToken().getToken();
-
-          // Store tokens
-          await AsyncStorage.setItem('idToken', idToken);
-          await AsyncStorage.setItem('accessToken', accessToken);
-          await AsyncStorage.setItem('refreshToken', refreshToken);
-          await AsyncStorage.setItem('userEmail', email);
-
-          resolve({
-            idToken,
-            accessToken,
-            refreshToken,
-            email,
-          });
-        },
-        onFailure: err => {
-          reject(err);
-        },
-      });
-    });
-  }
-
-  // Get current session
-  async getCurrentSession() {
-    return new Promise((resolve, reject) => {
-      const currentUser = userPool.getCurrentUser();
-      
-      if (!currentUser) {
-        reject(new Error('No current user'));
-        return;
-      }
-
-      currentUser.getSession((err, session) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-
-        if (!session.isValid()) {
-          reject(new Error('Session is invalid'));
-          return;
-        }
-
-        resolve({
-          idToken: session.getIdToken().getJwtToken(),
-          accessToken: session.getAccessToken().getJwtToken(),
-        });
-      });
-    });
-  }
-
-  // Get ID token (for GraphQL Authorization header)
-  async getIdToken() {
+    console.log('🔐 AuthService.signIn called');
+    
+    const trimmedEmail = email.toLowerCase().trim();
+    
     try {
-      const session = await this.getCurrentSession();
-      return session.idToken;
-    } catch (error) {
-      // Try from storage
-      const token = await AsyncStorage.getItem('idToken');
-      if (token) {
-        return token;
+      // Amplify handles everything: authentication, token storage, session management
+      const {isSignedIn, nextStep} = await signIn({
+        username: trimmedEmail,
+        password: password,
+      });
+
+      if (!isSignedIn) {
+        console.warn('⚠️ Sign in requires additional steps:', nextStep);
+        throw new Error('Additional authentication steps required');
       }
+
+      console.log('✅ Login successful!');
+
+      // Get session with tokens
+      const session = await fetchAuthSession();
+      
+      return {
+        idToken: session.tokens?.idToken?.toString(),
+        accessToken: session.tokens?.accessToken?.toString(),
+        email: trimmedEmail,
+      };
+    } catch (error) {
+      console.log('❌ Login failed!');
+      console.log('Error name:', error.name);
+      console.log('Error message:', error.message);
       throw error;
     }
   }
 
-  // Sign out
+  /**
+   * Sign out
+   */
   async signOut() {
-    const currentUser = userPool.getCurrentUser();
-    if (currentUser) {
-      currentUser.signOut();
+    try {
+      await signOut();
+      console.log('✅ Signed out successfully');
+    } catch (error) {
+      console.error('❌ Sign out error:', error);
+      throw error;
     }
-
-    // Clear stored tokens
-    await AsyncStorage.multiRemove([
-      'idToken',
-      'accessToken',
-      'refreshToken',
-      'userEmail',
-    ]);
   }
 
-  // Check if user is authenticated
+  /**
+   * Get current authenticated user
+   */
+  async getCurrentUser() {
+    try {
+      const user = await getCurrentUser();
+      return user;
+    } catch (error) {
+      console.log('No authenticated user');
+      return null;
+    }
+  }
+
+  /**
+   * Get current session (with automatic token refresh)
+   */
+  async getCurrentSession() {
+    try {
+      const session = await fetchAuthSession();
+      
+      if (!session.tokens) {
+        throw new Error('No valid session');
+      }
+
+      return {
+        idToken: session.tokens.idToken?.toString(),
+        accessToken: session.tokens.accessToken?.toString(),
+      };
+    } catch (error) {
+      console.log('❌ No current session:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get ID token (automatically refreshed if expired)
+   */
+  async getIdToken() {
+    try {
+      const session = await fetchAuthSession();
+      return session.tokens?.idToken?.toString();
+    } catch (error) {
+      console.error('❌ Failed to get ID token:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Check if user is authenticated
+   */
   async isAuthenticated() {
     try {
-      await this.getCurrentSession();
+      await getCurrentUser();
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }

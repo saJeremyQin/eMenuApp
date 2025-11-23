@@ -1,7 +1,29 @@
 import React, {useEffect, useState} from 'react';
-import {ApolloProvider} from '@apollo/client/react';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
-import apolloClient from './src/services/ApolloClient';
+
+// Initialize crypto polyfill for Amplify
+import 'react-native-get-random-values';
+
+// Configure Amplify FIRST (before any other imports that use it)
+import {Amplify} from 'aws-amplify';
+import {AWS_CONFIG} from './src/config/aws-config';
+
+Amplify.configure({
+  Auth: {
+    Cognito: {
+      userPoolId: AWS_CONFIG.userPoolId,
+      userPoolClientId: AWS_CONFIG.userPoolWebClientId,
+      signUpVerificationMethod: 'code',
+      loginWith: {
+        email: true,
+      },
+    },
+  },
+});
+
+// Load Amplify polyfills for React Native - must be at the top
+import '@aws-amplify/react-native';
+
 import AuthService from './src/services/AuthService';
 import FCMService from './src/services/FCMService';
 import AppNavigator from './src/navigation/AppNavigator';
@@ -30,10 +52,7 @@ function App() {
           console.log('📱 FCM Token:', fcmToken);
           
           // TODO: Upload FCM token to backend via GraphQL mutation
-          // await apolloClient.mutate({
-          //   mutation: UPDATE_FCM_TOKEN,
-          //   variables: { token: fcmToken }
-          // });
+          // await GraphQLClient.mutate(UPDATE_FCM_TOKEN, { token: fcmToken });
 
           // Listen for token refresh
           FCMService.onTokenRefresh(async (newToken: string) => {
@@ -47,18 +66,16 @@ function App() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   if (loading) {
     return null; // TODO: Add splash screen
   }
 
   return (
-    <ApolloProvider client={apolloClient}>
-      <SafeAreaProvider>
-        <AppNavigator isAuthenticated={isAuthenticated} />
-      </SafeAreaProvider>
-    </ApolloProvider>
+    <SafeAreaProvider>
+      <AppNavigator isAuthenticated={isAuthenticated} />
+    </SafeAreaProvider>
   );
 }
 

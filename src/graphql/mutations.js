@@ -1,4 +1,4 @@
-import {gql} from '@apollo/client';
+import {gql} from 'graphql-request';
 
 // Place order
 export const PLACE_ORDER = gql`

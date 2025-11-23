@@ -1,4 +1,4 @@
-import {gql} from '@apollo/client';
+import {gql} from 'graphql-request';
 
 // Get restaurant info
 export const GET_RESTAURANT = gql`

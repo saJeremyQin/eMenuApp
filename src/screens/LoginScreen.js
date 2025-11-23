@@ -14,6 +14,7 @@ const LoginScreen = ({navigation}) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -51,14 +52,22 @@ const LoginScreen = ({navigation}) => {
         autoCorrect={false}
       />
 
-      <TextInput
-        style={styles.input}
-        placeholder="密码"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        autoCapitalize="none"
-      />
+      <View style={styles.passwordContainer}>
+        <TextInput
+          style={styles.passwordInput}
+          placeholder="密码"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry={!showPassword}
+          textContentType="none"
+          autoCorrect={false}
+        />
+        <TouchableOpacity
+          style={styles.eyeIcon}
+          onPress={() => setShowPassword(!showPassword)}>
+          <Text style={styles.eyeText}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
+        </TouchableOpacity>
+      </View>
 
       <TouchableOpacity
         style={[styles.button, loading && styles.buttonDisabled]}
@@ -102,6 +111,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#ddd',
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 15,
+    fontSize: 16,
+  },
+  eyeIcon: {
+    padding: 15,
+  },
+  eyeText: {
+    fontSize: 20,
   },
   button: {
     backgroundColor: '#007AFF',
