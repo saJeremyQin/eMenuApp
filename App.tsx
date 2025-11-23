@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
+import Orientation from 'react-native-orientation-locker';
 
 // Initialize crypto polyfill for Amplify
 import 'react-native-get-random-values';
@@ -33,7 +34,14 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Lock app to landscape orientation only
+    Orientation.lockToLandscape();
+    
     initializeApp();
+
+    // Subscribe to auth state changes
+    const subscription = AuthService.subscribeToAuthChanges(setIsAuthenticated);
+    return () => subscription?.unsubscribe();
   }, []);
 
   const initializeApp = async () => {

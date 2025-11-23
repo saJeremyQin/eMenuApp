@@ -13,7 +13,7 @@ import GraphQLClient from '../services/GraphQLClient';
 
 // GraphQL query for pending orders
 const LIST_ORDERS = gql`
-  query ListOrders($status: String!) {
+  query ListOrders($status: OrderStatus!) {
     listOrders(status: $status) {
       id
       tableNumber

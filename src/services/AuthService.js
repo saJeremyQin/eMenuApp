@@ -118,6 +118,29 @@ class AuthService {
       return false;
     }
   }
+
+  /**
+   * Subscribe to authentication state changes
+   * Returns an unsubscribe function
+   */
+  subscribeToAuthChanges(callback) {
+    // Amplify doesn't have built-in event emitter for auth changes
+    // So we'll check auth status at regular intervals during app lifetime
+    const checkAuthStatus = async () => {
+      const isAuth = await this.isAuthenticated();
+      callback(isAuth);
+    };
+
+    // Check immediately
+    checkAuthStatus();
+
+    // Check periodically (every 1 second after sign out to detect logout)
+    const interval = setInterval(checkAuthStatus, 1000);
+
+    return {
+      unsubscribe: () => clearInterval(interval),
+    };
+  }
 }
 
 export default new AuthService();
