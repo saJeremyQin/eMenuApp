@@ -35,6 +35,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     return true
   }
+
+  // Orientation is controlled by Info.plist UISupportedInterfaceOrientations settings
+  // This is optional as iOS will respect the Info.plist settings automatically
 }
 
 class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {

@@ -18,9 +18,14 @@ const LoginScreen = ({navigation}) => {
   const [showPassword, setShowPassword] = useState(false);
   const {width, height, isLandscape} = useScreenDimensions();
 
+  // Debug: Log dimensions
+  React.useEffect(() => {
+    console.log('LoginScreen dimensions:', {width, height, isLandscape});
+  }, [width, height, isLandscape]);
+
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('错误', '请输入邮箱和密码');
+      Alert.alert('Error', 'Please enter email and password');
       return;
     }
 
@@ -31,8 +36,8 @@ const LoginScreen = ({navigation}) => {
     } catch (error) {
       console.error('Login error:', error);
       Alert.alert(
-        '登录失败',
-        error.message || '邮箱或密码错误，请重试',
+        'Login Failed',
+        error.message || 'Invalid email or password, please try again',
       );
     } finally {
       setLoading(false);
@@ -42,7 +47,7 @@ const LoginScreen = ({navigation}) => {
   const handleTitleLongPress = async () => {
     // Developer feature: long press title to logout
     await AuthService.signOut();
-    Alert.alert('已登出', '会话已清除，请重新登录');
+    Alert.alert('Logged Out', 'Session cleared, please log in again');
   };
 
   return (
@@ -59,7 +64,7 @@ const LoginScreen = ({navigation}) => {
       <View style={[styles.formContainer, isLandscape && styles.formContainerLandscape]}>
         <TextInput
           style={[styles.input, isLandscape && styles.inputLandscape]}
-          placeholder="邮箱"
+          placeholder="Email"
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
@@ -70,7 +75,7 @@ const LoginScreen = ({navigation}) => {
         <View style={[styles.passwordContainer, isLandscape && styles.passwordContainerLandscape]}>
           <TextInput
             style={[styles.passwordInput, isLandscape && styles.passwordInputLandscape]}
-            placeholder="密码"
+            placeholder="Password"
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
@@ -91,7 +96,7 @@ const LoginScreen = ({navigation}) => {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.buttonText}>登录</Text>
+            <Text style={styles.buttonText}>Sign In</Text>
           )}
         </TouchableOpacity>
       </View>

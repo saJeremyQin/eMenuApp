@@ -51,7 +51,7 @@ const OrdersScreen = () => {
       setOrders(data.listOrders || []);
     } catch (err) {
       console.error('❌ Failed to fetch orders:', err);
-      setError(err.message || '获取订单失败');
+      setError(err.message || 'Failed to fetch orders');
     } finally {
       setLoading(false);
     }
@@ -65,13 +65,13 @@ const OrdersScreen = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>待处理订单</Text>
+      <Text style={styles.title}>Pending Orders</Text>
       
       {error && (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>⚠️ {error}</Text>
           <TouchableOpacity onPress={fetchOrders} style={styles.retryButton}>
-            <Text style={styles.retryText}>重试</Text>
+            <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -85,12 +85,12 @@ const OrdersScreen = () => {
               {loading ? '⏳' : '🎉'}
             </Text>
             <Text style={styles.emptyTitle}>
-              {loading ? '正在获取订单...' : '暂无订单'}
+              {loading ? 'Fetching orders...' : 'No orders'}
             </Text>
             <Text style={styles.emptySubtitle}>
               {loading 
-                ? '使用 graphql-request 查询中' 
-                : '当有新订单时，会在这里显示'}
+                ? 'Querying with graphql-request' 
+                : 'New orders will appear here'}
             </Text>
           </View>
         }

@@ -34,8 +34,8 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Lock app to landscape orientation only
-    Orientation.lockToLandscape();
+    // Lock iPhone to portrait, iPad orientation is handled by AppDelegate
+    Orientation.lockToPortrait();
     
     initializeApp();
 
