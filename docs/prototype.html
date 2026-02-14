@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>eMenu - Waiter App 产品原型</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 480px;
+            margin: 20px auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 800px;
+        }
+
+        .header {
+            background: #2196F3;
+            color: white;
+            padding: 16px;
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .badge {
+            background: #ff4444;
+            color: white;
+            border-radius: 50%;
+            padding: 2px 6px;
+            font-size: 12px;
+            min-width: 20px;
+            text-align: center;
+        }
+
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: none;
+        }
+
+        .content.active {
+            display: block;
+        }
+
+        .tab-bar {
+            display: flex;
+            border-top: 1px solid #e0e0e0;
+            background: white;
+        }
+
+        .tab-item {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+            font-size: 12px;
+            color: #999;
+        }
+
+        .tab-item.active {
+            color: #2196F3;
+            border-bottom-color: #2196F3;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 16px 0 12px 0;
+            color: #333;
+        }
+
+        .table-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .table-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .table-card:hover {
+            border-color: #2196F3;
+            background: #f0f7ff;
+        }
+
+        .table-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .table-status {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 400px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 16px;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .diner-input-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .diner-input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .btn-remove {
+            padding: 8px 12px;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .btn-add-diner {
+            padding: 10px;
+            background: #f0f0f0;
+            color: #2196F3;
+            border: 1px dashed #2196F3;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 14px;
+        }
+
+        .button {
+            padding: 12px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #2196F3;
+            color: white;
+            width: 100%;
+            margin-top: 16px;
+        }
+
+        .btn-primary:hover {
+            background: #1976D2;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-small {
+            padding: 8px 12px;
+            font-size: 12px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .menu-category {
+            margin-bottom: 20px;
+        }
+
+        .category-name {
+            font-size: 14px;
+            font-weight: bold;
+            color: #666;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .menu-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: #f9f9f9;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+
+        .item-info {
+            flex: 1;
+        }
+
+        .item-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .item-price {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .item-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .quantity-btn {
+            width: 24px;
+            height: 24px;
+            border: 1px solid #2196F3;
+            background: white;
+            color: #2196F3;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .quantity-display {
+            width: 30px;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .shopping-cart {
+            background: #f9f9f9;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 16px;
+        }
+
+        .cart-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            color: #333;
+        }
+
+        .cart-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .cart-item:last-child {
+            border-bottom: none;
+        }
+
+        .cart-item-name {
+            font-size: 13px;
+            color: #333;
+            flex: 1;
+        }
+
+        .cart-item-qty {
+            font-size: 12px;
+            color: #666;
+            margin: 0 8px;
+        }
+
+        .cart-item-price {
+            font-size: 13px;
+            font-weight: bold;
+            color: #2196F3;
+        }
+
+        .cart-total {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 2px solid #ddd;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .action-link {
+            display: inline-block;
+            color: #2196F3;
+            text-decoration: none;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 12px;
+        }
+
+        .action-link:hover {
+            text-decoration: underline;
+        }
+
+        .alert {
+            padding: 12px;
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .alert.success {
+            background: #e8f5e9;
+            border-left-color: #4caf50;
+        }
+
+        .alert.info {
+            background: #fff3e0;
+            border-left-color: #ff9800;
+        }
+
+        .order-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .order-card:hover {
+            border-color: #2196F3;
+            background: #f0f7ff;
+        }
+
+        .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .order-id {
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .order-status {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-confirmed {
+            background: #cfe2ff;
+            color: #084298;
+        }
+
+        .status-paid {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .order-detail {
+            font-size: 12px;
+            color: #666;
+            margin: 4px 0;
+        }
+
+        .sub-tab {
+            display: flex;
+            gap: 0;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .sub-tab-item {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+            font-size: 14px;
+            color: #999;
+            font-weight: 500;
+        }
+
+        .sub-tab-item.active {
+            color: #2196F3;
+            border-bottom-color: #2196F3;
+        }
+
+        .sub-tab-content {
+            display: none;
+        }
+
+        .sub-tab-content.active {
+            display: block;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 16px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .confirmation-section {
+            background: #f9f9f9;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .confirmation-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .confirmation-item:last-child {
+            border-bottom: none;
+        }
+
+        .confirmation-label {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .confirmation-value {
+            font-size: 13px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .payment-methods {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .payment-method {
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .payment-method.selected {
+            border-color: #2196F3;
+            background: #f0f7ff;
+        }
+
+        .payment-method-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .payment-method-name {
+            font-size: 13px;
+            font-weight: 500;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <span id="headerTitle">Tables</span>
+            <span id="ordersBadge" style="display:none;" class="badge">0</span>
+        </div>
+
+        <!-- Tab 1: Tables -->
+        <div id="tablesContent" class="content active">
+            <div class="section-title">🍽️ 选择桌位</div>
+            <div class="table-grid" id="tableGrid"></div>
+            <div id="dinersAlert" style="display:none;" class="alert info">
+                <strong>已选：</strong> <span id="selectedTableDisplay"></span> - <span id="dinersDisplay"></span>
+                <div style="margin-top: 8px;">
+                    <a href="#" class="action-link" onclick="startOrdering(event)">🍴 开始为此桌点餐</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 2: Menu -->
+        <div id="menuContent" class="content">
+            <div id="currentOrderInfo" style="margin-bottom: 12px; padding: 12px; background: #f0f7ff; border-radius: 6px;">
+                <div style="font-size: 14px; color: #333;">
+                    <strong>桌位：</strong> <span id="menuTableDisplay">-</span><br>
+                    <strong>用餐者：</strong> <span id="menuDinersDisplay">-</span>
+                </div>
+            </div>
+            <div class="section-title">菜单</div>
+            <div id="menuItems"></div>
+            <div class="shopping-cart">
+                <div class="cart-title">🛒 购物车</div>
+                <div id="cartItems"></div>
+                <div class="cart-total">
+                    <span>总计：</span>
+                    <span>¥<span id="cartTotal">0.00</span></span>
+                </div>
+                <button class="btn-primary" onclick="placeOrder()" id="placeOrderBtn" style="margin-top: 12px;">下单</button>
+                <a href="#" class="action-link" onclick="backToTables(event)" style="display: block; text-align: center; margin-top: 8px;">← 返回桌位</a>
+            </div>
+        </div>
+
+        <!-- Tab 3: Orders -->
+        <div id="ordersContent" class="content">
+            <div class="sub-tab">
+                <div class="sub-tab-item active" onclick="switchSubTab('pending')">待确认 <span id="pendingBadge" style="margin-left: 4px;">(0)</span></div>
+                <div class="sub-tab-item" onclick="switchSubTab('confirmed')">待支付 <span id="confirmedBadge" style="margin-left: 4px;">(0)</span></div>
+            </div>
+
+            <div id="pendingTab" class="sub-tab-content active">
+                <div id="pendingOrders"></div>
+            </div>
+
+            <div id="confirmedTab" class="sub-tab-content">
+                <div id="confirmedOrders"></div>
+            </div>
+
+            <a href="#" class="action-link" onclick="backToTables(event)" style="display: block; margin-top: 16px;">← 返回桌位点餐</a>
+        </div>
+
+        <!-- Tab 4: About -->
+        <div id="aboutContent" class="content">
+            <div class="section-title">ℹ️ 关于</div>
+            <div style="padding: 16px; background: #f9f9f9; border-radius: 8px;">
+                <p style="margin-bottom: 12px;"><strong>eMenu Waiter App</strong></p>
+                <p style="font-size: 13px; color: #666; margin-bottom: 8px;">版本：1.0.0</p>
+                <p style="font-size: 13px; color: #666; margin-bottom: 16px;">高保真产品原型</p>
+                <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 16px 0;">
+                <p style="font-size: 13px; color: #999;">这是基于新导航设计的完整交互原型，展示了：</p>
+                <ul style="font-size: 13px; color: #999; margin-top: 12px; padding-left: 20px;">
+                    <li>4 个 Tab 导航</li>
+                    <li>多桌并发点餐流程</li>
+                    <li>Redux 状态管理</li>
+                    <li>订单确认和支付</li>
+                    <li>实时购物车计算</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Tab Bar -->
+        <div class="tab-bar">
+            <div class="tab-item active" onclick="switchTab('tables')">🍽️ Tables</div>
+            <div class="tab-item" onclick="switchTab('menu')">🍴 Menu</div>
+            <div class="tab-item" onclick="switchTab('orders')">📋 Orders</div>
+            <div class="tab-item" onclick="switchTab('about')">ℹ️ About</div>
+        </div>
+    </div>
+
+    <!-- Add Diners Modal -->
+    <div id="dinersModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-title">添加用餐者</div>
+            <div id="dinersContainer"></div>
+            <button class="btn-add-diner" onclick="addDinerInput()">+ 添加用餐者</button>
+            <button class="btn-primary" onclick="confirmDiners()">下一步</button>
+            <button class="btn-secondary" onclick="closeDinersModal()">取消</button>
+        </div>
+    </div>
+
+    <!-- Confirm Order Modal -->
+    <div id="confirmOrderModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-title">确认订单</div>
+            <div class="confirmation-section">
+                <div class="confirmation-item">
+                    <span class="confirmation-label">桌位</span>
+                    <span class="confirmation-value" id="confirmTableId">-</span>
+                </div>
+                <div class="confirmation-item">
+                    <span class="confirmation-label">用餐者</span>
+                    <span class="confirmation-value" id="confirmDiners">-</span>
+                </div>
+                <div class="confirmation-item">
+                    <span class="confirmation-label">菜品数</span>
+                    <span class="confirmation-value" id="confirmItemCount">0</span>
+                </div>
+                <div class="confirmation-item">
+                    <span class="confirmation-label">订单总额</span>
+                    <span class="confirmation-value" style="color: #2196F3; font-size: 16px;">¥<span id="confirmTotal">0.00</span></span>
+                </div>
+            </div>
+            <div style="background: #f0f0f0; padding: 12px; border-radius: 6px; margin-bottom: 16px; text-align: center; color: #666; font-size: 13px;">
+                ✓ 已确认菜品，可以打印订单
+            </div>
+            <button class="btn-primary" onclick="completeOrder()">确认支付</button>
+            <button class="btn-secondary" onclick="closeConfirmOrderModal()">返回修改</button>
+        </div>
+    </div>
+
+    <!-- Checkout Modal -->
+    <div id="checkoutModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-title">收款确认</div>
+            <div class="confirmation-section">
+                <div class="confirmation-item">
+                    <span class="confirmation-label">订单ID</span>
+                    <span class="confirmation-value" id="checkoutOrderId">-</span>
+                </div>
+                <div class="confirmation-item">
+                    <span class="confirmation-label">订单金额</span>
+                    <span class="confirmation-value" style="color: #2196F3; font-size: 16px;">¥<span id="checkoutAmount">0.00</span></span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">支付方式</label>
+                <div class="payment-methods">
+                    <div class="payment-method selected" onclick="selectPaymentMethod('cash')">
+                        <div class="payment-method-icon">💵</div>
+                        <div class="payment-method-name">现金</div>
+                    </div>
+                    <div class="payment-method" onclick="selectPaymentMethod('card')">
+                        <div class="payment-method-icon">💳</div>
+                        <div class="payment-method-name">刷卡</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">收款金额</label>
+                <input type="number" id="paidAmount" class="form-input" placeholder="输入金额" value="0.00">
+            </div>
+
+            <button class="btn-primary" onclick="payOrder()">确认支付</button>
+            <button class="btn-secondary" onclick="closeCheckoutModal()">取消</button>
+        </div>
+    </div>
+
+    <script>
+        // Redux State Management
+        const state = {
+            currentOrder: {
+                tableId: null,
+                diners: [],
+                shoppingCart: []
+            },
+            allOrders: [],
+            tables: [
+                { id: 'table-1', number: 1, status: 'EMPTY' },
+                { id: 'table-2', number: 2, status: 'OCCUPIED' },
+                { id: 'table-3', number: 3, status: 'EMPTY' },
+                { id: 'table-4', number: 4, status: 'OCCUPIED' },
+                { id: 'table-5', number: 5, status: 'EMPTY' },
+                { id: 'table-6', number: 6, status: 'EMPTY' }
+            ],
+            ui: {
+                currentTab: 'tables',
+                currentSubTab: 'pending'
+            }
+        };
+
+        const menuData = {
+            '热菜': [
+                { id: 'd1', name: '宫保鸡丁', price: 28 },
+                { id: 'd2', name: '红烧肉', price: 32 },
+                { id: 'd3', name: '鱼香肉丝', price: 26 }
+            ],
+            '清汤': [
+                { id: 'd4', name: '冬瓜排骨汤', price: 18 },
+                { id: 'd5', name: '海参鸡汤', price: 48 }
+            ],
+            '素菜': [
+                { id: 'd6', name: '清炒空心菜', price: 12 },
+                { id: 'd7', name: '蒜蓉西兰花', price: 14 }
+            ]
+        };
+
+        // Init
+        window.onload = () => {
+            renderTables();
+            renderMenu();
+        };
+
+        // Tab Navigation
+        function switchTab(tabName) {
+            document.querySelectorAll('.content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-item').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(tabName + 'Content').classList.add('active');
+            event.target.classList.add('active');
+
+            const titles = {
+                tables: '🍽️ Tables',
+                menu: '🍴 Menu',
+                orders: '📋 Orders',
+                about: 'ℹ️ About'
+            };
+            document.getElementById('headerTitle').textContent = titles[tabName];
+            state.ui.currentTab = tabName;
+
+            if (tabName === 'orders') {
+                renderOrders();
+                updateBadges();
+            }
+        }
+
+        // Render Tables
+        function renderTables() {
+            const grid = document.getElementById('tableGrid');
+            grid.innerHTML = state.tables.map(table => `
+                <div class="table-card" onclick="selectTable('${table.id}', ${table.number})">
+                    <div class="table-number">Table ${table.number}</div>
+                    <div class="table-status">${table.status === 'EMPTY' ? '空桌' : '有客'}</div>
+                </div>
+            `).join('');
+        }
+
+        // Select Table
+        function selectTable(tableId, tableNumber) {
+            state.currentOrder.tableId = tableId;
+            state.currentOrder.diners = [];
+            state.currentOrder.shoppingCart = [];
+            
+            document.getElementById('selectedTableDisplay').textContent = `Table ${tableNumber}`;
+            document.getElementById('dinersAlert').style.display = 'block';
+            
+            showDinersModal();
+        }
+
+        // Diner Input Management
+        function showDinersModal() {
+            const container = document.getElementById('dinersContainer');
+            container.innerHTML = `<div class="diner-input-group">
+                <input type="text" class="diner-input" placeholder="输入用餐者名字">
+                <button class="btn-remove" onclick="removeDinerInput(this)">×</button>
+            </div>`;
+            document.getElementById('dinersModal').classList.add('show');
+        }
+
+        function addDinerInput() {
+            const container = document.getElementById('dinersContainer');
+            const input = document.createElement('div');
+            input.className = 'diner-input-group';
+            input.innerHTML = `
+                <input type="text" class="diner-input" placeholder="输入用餐者名字">
+                <button class="btn-remove" onclick="removeDinerInput(this)">×</button>
+            `;
+            container.appendChild(input);
+        }
+
+        function removeDinerInput(btn) {
+            btn.parentElement.remove();
+        }
+
+        function confirmDiners() {
+            const inputs = document.querySelectorAll('#dinersContainer .diner-input');
+            const diners = Array.from(inputs).map(input => input.value).filter(v => v);
+            
+            if (diners.length === 0) {
+                alert('请至少添加一个用餐者');
+                return;
+            }
+
+            state.currentOrder.diners = diners;
+            document.getElementById('dinersDisplay').textContent = diners.join(', ');
+            closeDinersModal();
+        }
+
+        function closeDinersModal() {
+            document.getElementById('dinersModal').classList.remove('show');
+        }
+
+        // Render Menu
+        function renderMenu() {
+            const menuItems = document.getElementById('menuItems');
+            let html = '';
+            
+            for (const [category, items] of Object.entries(menuData)) {
+                html += `<div class="menu-category">
+                    <div class="category-name">${category}</div>
+                    ${items.map(item => `
+                        <div class="menu-item">
+                            <div class="item-info">
+                                <div class="item-name">${item.name}</div>
+                                <div class="item-price">¥${item.price}</div>
+                            </div>
+                            <div class="item-controls">
+                                <button class="quantity-btn" onclick="decreaseQty('${item.id}')">−</button>
+                                <div class="quantity-display" id="qty-${item.id}">0</div>
+                                <button class="quantity-btn" onclick="increaseQty('${item.id}', '${item.name}', ${item.price})">+</button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>`;
+            }
+
+            menuItems.innerHTML = html;
+        }
+
+        function increaseQty(dishId, name, price) {
+            const existing = state.currentOrder.shoppingCart.find(item => item.dishId === dishId);
+            if (existing) {
+                existing.quantity++;
+            } else {
+                state.currentOrder.shoppingCart.push({ dishId, name, price, quantity: 1 });
+            }
+            updateCart();
+        }
+
+        function decreaseQty(dishId) {
+            const item = state.currentOrder.shoppingCart.find(item => item.dishId === dishId);
+            if (item) {
+                item.quantity--;
+                if (item.quantity <= 0) {
+                    state.currentOrder.shoppingCart = state.currentOrder.shoppingCart.filter(i => i.dishId !== dishId);
+                }
+            }
+            updateCart();
+        }
+
+        function updateCart() {
+            const cartItems = document.getElementById('cartItems');
+            const cartTotal = document.getElementById('cartTotal');
+            
+            if (state.currentOrder.shoppingCart.length === 0) {
+                cartItems.innerHTML = '<div style="text-align: center; color: #999; padding: 16px;">购物车为空</div>';
+                cartTotal.textContent = '0.00';
+                document.getElementById('placeOrderBtn').disabled = true;
+                return;
+            }
+
+            let total = 0;
+            cartItems.innerHTML = state.currentOrder.shoppingCart.map(item => {
+                const itemTotal = item.price * item.quantity;
+                total += itemTotal;
+                return `
+                    <div class="cart-item">
+                        <span class="cart-item-name">${item.name}</span>
+                        <span class="cart-item-qty">×${item.quantity}</span>
+                        <span class="cart-item-price">¥${itemTotal.toFixed(2)}</span>
+                    </div>
+                `;
+            }).join('');
+
+            cartTotal.textContent = total.toFixed(2);
+            document.getElementById('placeOrderBtn').disabled = false;
+
+            // Update quantity displays
+            state.currentOrder.shoppingCart.forEach(item => {
+                document.getElementById('qty-' + item.dishId).textContent = item.quantity;
+            });
+        }
+
+        function startOrdering(e) {
+            e.preventDefault();
+            switchTab('menu');
+            updateMenuDisplay();
+        }
+
+        function updateMenuDisplay() {
+            const tableNum = state.tables.find(t => t.id === state.currentOrder.tableId).number;
+            document.getElementById('menuTableDisplay').textContent = `Table ${tableNum}`;
+            document.getElementById('menuDinersDisplay').textContent = state.currentOrder.diners.join(', ');
+        }
+
+        function placeOrder() {
+            if (state.currentOrder.shoppingCart.length === 0) {
+                alert('购物车为空，请先添加菜品');
+                return;
+            }
+
+            const tableNum = state.tables.find(t => t.id === state.currentOrder.tableId).number;
+            document.getElementById('confirmTableId').textContent = `Table ${tableNum}`;
+            document.getElementById('confirmDiners').textContent = state.currentOrder.diners.join(', ');
+            document.getElementById('confirmItemCount').textContent = state.currentOrder.shoppingCart.reduce((sum, item) => sum + item.quantity, 0);
+            
+            const total = state.currentOrder.shoppingCart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+            document.getElementById('confirmTotal').textContent = total.toFixed(2);
+
+            document.getElementById('confirmOrderModal').classList.add('show');
+        }
+
+        function closeConfirmOrderModal() {
+            document.getElementById('confirmOrderModal').classList.remove('show');
+        }
+
+        function completeOrder() {
+            const orderId = 'ord-' + Date.now();
+            const total = state.currentOrder.shoppingCart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+            const order = {
+                orderId,
+                tableId: state.currentOrder.tableId,
+                diners: [...state.currentOrder.diners],
+                items: [...state.currentOrder.shoppingCart],
+                totalAmount: total,
+                status: 'PENDING',
+                createdAt: new Date().toISOString()
+            };
+
+            state.allOrders.push(order);
+            state.currentOrder.tableId = null;
+            state.currentOrder.diners = [];
+            state.currentOrder.shoppingCart = [];
+
+            closeConfirmOrderModal();
+            document.getElementById('dinersAlert').style.display = 'none';
+            switchTab('tables');
+            renderTables();
+            alert('订单已创建！订单号：' + orderId);
+        }
+
+        function backToTables(e) {
+            e.preventDefault();
+            switchTab('tables');
+            document.getElementById('dinersAlert').style.display = 'none';
+        }
+
+        // Orders Management
+        function renderOrders() {
+            const pendingOrders = state.allOrders.filter(o => o.status === 'PENDING');
+            const confirmedOrders = state.allOrders.filter(o => o.status === 'CONFIRMED');
+
+            document.getElementById('pendingOrders').innerHTML = pendingOrders.length === 0 
+                ? '<div class="empty-state"><div class="empty-state-icon">📭</div><p>暂无待确认订单</p></div>'
+                : pendingOrders.map(order => `
+                    <div class="order-card" onclick="confirmOrder('${order.orderId}')">
+                        <div class="order-header">
+                            <div class="order-id">${order.orderId}</div>
+                            <div class="order-status status-pending">待确认</div>
+                        </div>
+                        <div class="order-detail">Table: ${state.tables.find(t => t.id === order.tableId).number}</div>
+                        <div class="order-detail">用餐者: ${order.diners.join(', ')}</div>
+                        <div class="order-detail">菜品数: ${order.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
+                        <div class="order-detail" style="font-weight: bold; color: #2196F3;">¥${order.totalAmount.toFixed(2)}</div>
+                    </div>
+                `).join('');
+
+            document.getElementById('confirmedOrders').innerHTML = confirmedOrders.length === 0
+                ? '<div class="empty-state"><div class="empty-state-icon">📭</div><p>暂无待支付订单</p></div>'
+                : confirmedOrders.map(order => `
+                    <div class="order-card" onclick="openCheckout('${order.orderId}')">
+                        <div class="order-header">
+                            <div class="order-id">${order.orderId}</div>
+                            <div class="order-status status-confirmed">待支付</div>
+                        </div>
+                        <div class="order-detail">Table: ${state.tables.find(t => t.id === order.tableId).number}</div>
+                        <div class="order-detail">用餐者: ${order.diners.join(', ')}</div>
+                        <div class="order-detail">菜品数: ${order.items.reduce((sum, item) => sum + item.quantity, 0)}</div>
+                        <div class="order-detail" style="font-weight: bold; color: #2196F3;">¥${order.totalAmount.toFixed(2)}</div>
+                    </div>
+                `).join('');
+
+            updateBadges();
+        }
+
+        function updateBadges() {
+            const pending = state.allOrders.filter(o => o.status === 'PENDING').length;
+            const confirmed = state.allOrders.filter(o => o.status === 'CONFIRMED').length;
+            
+            document.getElementById('pendingBadge').textContent = `(${pending})`;
+            document.getElementById('confirmedBadge').textContent = `(${confirmed})`;
+            
+            if (pending > 0) {
+                document.getElementById('ordersBadge').textContent = pending;
+                document.getElementById('ordersBadge').style.display = 'block';
+            } else {
+                document.getElementById('ordersBadge').style.display = 'none';
+            }
+        }
+
+        function switchSubTab(tabName) {
+            document.querySelectorAll('.sub-tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.sub-tab-item').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(tabName + 'Tab').classList.add('active');
+            event.target.classList.add('active');
+            state.ui.currentSubTab = tabName;
+        }
+
+        function confirmOrder(orderId) {
+            const order = state.allOrders.find(o => o.orderId === orderId);
+            if (order) {
+                order.status = 'CONFIRMED';
+                order.confirmedAt = new Date().toISOString();
+                renderOrders();
+                alert(`订单 ${orderId} 已确认！`);
+            }
+        }
+
+        function openCheckout(orderId) {
+            const order = state.allOrders.find(o => o.orderId === orderId);
+            if (order) {
+                document.getElementById('checkoutOrderId').textContent = orderId;
+                document.getElementById('checkoutAmount').textContent = order.totalAmount.toFixed(2);
+                document.getElementById('paidAmount').value = order.totalAmount.toFixed(2);
+                window.currentPayingOrderId = orderId;
+                document.getElementById('checkoutModal').classList.add('show');
+            }
+        }
+
+        function closeCheckoutModal() {
+            document.getElementById('checkoutModal').classList.remove('show');
+        }
+
+        function selectPaymentMethod(method) {
+            document.querySelectorAll('.payment-method').forEach(el => el.classList.remove('selected'));
+            event.target.closest('.payment-method').classList.add('selected');
+        }
+
+        function payOrder() {
+            const order = state.allOrders.find(o => o.orderId === window.currentPayingOrderId);
+            if (order) {
+                order.status = 'PAID';
+                order.paidAt = new Date().toISOString();
+                closeCheckoutModal();
+                renderOrders();
+                alert(`订单 ${window.currentPayingOrderId} 已支付！`);
+            }
+        }
+    </script>
+</body>
+</html>

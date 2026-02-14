@@ -36,8 +36,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     return true
   }
 
-  // Orientation is controlled by Info.plist UISupportedInterfaceOrientations settings
-  // This is optional as iOS will respect the Info.plist settings automatically
+  // Orientation is controlled by react-native-orientation-locker
+  func application(
+    _ application: UIApplication,
+    supportedInterfaceOrientationsFor window: UIWindow?
+  ) -> UIInterfaceOrientationMask {
+    return .landscapeRight
+  }
 }
 
 class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {

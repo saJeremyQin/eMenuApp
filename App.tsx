@@ -1,5 +1,6 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useState, useCallback} from 'react';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
+import {Provider as ReduxProvider} from 'react-redux';
 import Orientation from 'react-native-orientation-locker';
 
 // Initialize crypto polyfill for Amplify
@@ -8,10 +9,14 @@ import 'react-native-get-random-values';
 // Configure Amplify FIRST (before any other imports that use it)
 import {Amplify} from 'aws-amplify';
 import {AWS_CONFIG} from './src/config/aws-config';
+import {GRAPHQL_CONFIG} from './src/config/aws-config';
+import {store} from './src/store/store';
+import {getCurrentUser, signOut} from 'aws-amplify/auth';
 
 Amplify.configure({
   Auth: {
     Cognito: {
+      region: AWS_CONFIG.region,
       userPoolId: AWS_CONFIG.userPoolId,
       userPoolClientId: AWS_CONFIG.userPoolWebClientId,
       signUpVerificationMethod: 'code',
@@ -20,70 +25,90 @@ Amplify.configure({
       },
     },
   },
+  API: {
+    GraphQL: {
+      endpoint: GRAPHQL_CONFIG.endpoint,
+      region: AWS_CONFIG.region,
+      defaultAuthMode: 'userPool',
+    },
+  },
 });
 
 // Load Amplify polyfills for React Native - must be at the top
 import '@aws-amplify/react-native';
 
-import AuthService from './src/services/AuthService';
-import FCMService from './src/services/FCMService';
 import AppNavigator from './src/navigation/AppNavigator';
+
+// Global auth context for signOut
+export const handleGlobalLogout = async () => {
+  try {
+    console.log('[Auth] Signing out user');
+    await signOut();
+    console.log('[Auth] User signed out successfully');
+  } catch (error) {
+    console.error('[Auth] Error during sign out:', error);
+  }
+};
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Lock iPhone to portrait, iPad orientation is handled by AppDelegate
-    Orientation.lockToPortrait();
+    // Lock to landscape mode for iPad/tablets
+    Orientation.lockToLandscape();
     
+    // Initialize app and monitor auth state
     initializeApp();
+  }, []);
 
-    // Subscribe to auth state changes
-    const subscription = AuthService.subscribeToAuthChanges(setIsAuthenticated);
-    return () => subscription?.unsubscribe();
+  const checkAuthState = useCallback(async () => {
+    try {
+      console.log('[Auth] Checking authentication state');
+      const user = await getCurrentUser();
+      console.log('[Auth] Current user:', user?.username);
+      setIsAuthenticated(true);
+    } catch (error) {
+      console.log('[Auth] No authenticated user found');
+      setIsAuthenticated(false);
+    }
   }, []);
 
   const initializeApp = async () => {
     try {
-      // Check authentication status
-      const authenticated = await AuthService.isAuthenticated();
-      setIsAuthenticated(authenticated);
-
-      if (authenticated) {
-        // Request FCM permission
-        const permissionGranted = await FCMService.requestPermission();
-        
-        if (permissionGranted) {
-          // Get FCM token
-          const fcmToken = await FCMService.getToken();
-          console.log('📱 FCM Token:', fcmToken);
-          
-          // TODO: Upload FCM token to backend via GraphQL mutation
-          // await GraphQLClient.mutate(UPDATE_FCM_TOKEN, { token: fcmToken });
-
-          // Listen for token refresh
-          FCMService.onTokenRefresh(async (newToken: string) => {
-            console.log('🔄 Token refreshed:', newToken);
-            // TODO: Update backend with new token
-          });
-        }
-      }
+      // Check if user is already authenticated
+      await checkAuthState();
     } catch (error) {
-      console.error('App initialization error:', error);
+      console.error('[App] Initialization error:', error);
+      setIsAuthenticated(false);
     } finally {
       setLoading(false);
     }
-  }
+  };
+
+  // Monitor authentication state changes
+  useEffect(() => {
+    if (loading) return;
+
+    // Set up interval to check auth state periodically
+    // This helps catch sign-outs from other parts of the app
+    const authCheckInterval = setInterval(() => {
+      checkAuthState();
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(authCheckInterval);
+  }, [loading, checkAuthState]);
 
   if (loading) {
     return null; // TODO: Add splash screen
   }
 
   return (
-    <SafeAreaProvider>
-      <AppNavigator isAuthenticated={isAuthenticated} />
-    </SafeAreaProvider>
+    <ReduxProvider store={store}>
+      <SafeAreaProvider>
+        <AppNavigator isAuthenticated={isAuthenticated} />
+      </SafeAreaProvider>
+    </ReduxProvider>
   );
 }
 

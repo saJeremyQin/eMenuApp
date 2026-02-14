@@ -1,0 +1,1785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>eMenuApp v4 - Interactive Prototype</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a1f3f;
+            overflow: hidden;
+        }
+
+        .app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* ========== HEADER ========== */
+        .header {
+            background: #0a1f3f;
+            color: #ff3d7f;
+            padding: 12px 20px;
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 100;
+            border-bottom: 2px solid #ff3d7f;
+        }
+
+        .header-back {
+            cursor: pointer;
+            font-size: 24px;
+            color: #ff3d7f;
+            display: none;
+        }
+
+        .header-back.show {
+            display: block;
+        }
+
+        .header-title {
+            flex: 1;
+            color: white;
+        }
+
+        .header-badge {
+            background: #ff3d7f;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        /* ========== MAIN CONTENT ========== */
+        .content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .screen {
+            display: none;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .screen.active {
+            display: flex;
+            position: relative;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* ========== TAB BAR ========== */
+        .tab-bar {
+            display: flex;
+            background: #0a1f3f;
+            border-top: 2px solid #ff3d7f;
+            height: 60px;
+        }
+
+        .tab {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: #7a8fa3;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            color: #ff3d7f;
+            border-bottom-color: #ff3d7f;
+        }
+
+        .tab:hover {
+            background: #1a2f4f;
+        }
+
+        .tab-icon {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+
+        .tab-label {
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        /* ========== TABLE SCREEN ========== */
+        .table-screen {
+            flex-direction: column;
+            background: #0f2a48;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .tables-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            flex: 1;
+        }
+
+        .table-card {
+            background: #1a3a5c;
+            border-radius: 8px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-height: 160px;
+            position: relative;
+            border: 2px solid #2a4a6c;
+        }
+
+        .table-card:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(255, 61, 127, 0.3);
+            border-color: #ff3d7f;
+        }
+
+        .table-card.has-order {
+            background: #2a4a6c;
+        }
+
+        .table-card.flashing {
+            animation: flash 0.6s infinite;
+        }
+
+        @keyframes flash {
+            0%, 100% { background: #1a3a5c; border-color: #2a4a6c; }
+            50% { background: #ff3d7f; border-color: #ff3d7f; }
+        }
+
+        .table-icon {
+            font-size: 50px;
+            margin-bottom: 8px;
+        }
+
+        .table-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 4px;
+        }
+
+        .table-total {
+            font-size: 16px;
+            color: #999;
+            font-weight: 700;
+            transition: all 0.3s;
+        }
+
+        .table-total.active {
+            color: #ff3d7f;
+            font-size: 18px;
+            text-shadow: 0 0 8px rgba(255, 61, 127, 0.3);
+        }
+
+        .table-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #ff3d7f;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 700;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        /* ========== ORDER SCREEN ========== */
+        .order-screen {
+            flex-direction: row;
+            background: white;
+            overflow: hidden;
+        }
+
+        .order-left {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #ddd;
+            overflow: hidden;
+        }
+
+        .menu-categories {
+            display: flex;
+            gap: 8px;
+            padding: 12px;
+            overflow-x: auto;
+            border-bottom: 1px solid #eee;
+            flex-shrink: 0;
+        }
+
+        .category-btn {
+            background: transparent;
+            border: 2px solid #ff3d7f;
+            color: #ff3d7f;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        .category-btn.active {
+            background: #ff3d7f;
+            color: white;
+        }
+
+        .category-btn:hover {
+            background: rgba(255, 61, 127, 0.1);
+        }
+
+        .dishes-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .dish-card {
+            background: #1a3a5c;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid #2a4a6c;
+        }
+
+        .dish-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 8px rgba(255, 61, 127, 0.2);
+            border-color: #ff3d7f;
+        }
+
+        .dish-placeholder {
+            width: 100%;
+            height: 80px;
+            background: #0a2a4a;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+
+        .dish-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 4px;
+            height: 30px;
+            overflow: hidden;
+        }
+
+        .dish-price {
+            font-size: 14px;
+            color: #ff3d7f;
+            font-weight: 700;
+        }
+
+        .order-right {
+            width: 40%;
+            background: #1a3a5c;
+            display: flex;
+            flex-direction: column;
+            border-left: 2px solid #ff3d7f;
+        }
+
+        .cart-header {
+            background: #0a1f3f;
+            color: #ff3d7f;
+            padding: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 2px solid #ff3d7f;
+        }
+
+        .cart-header-icon {
+            font-size: 20px;
+        }
+
+        .cart-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid #2a4a6c;
+            padding: 0 12px;
+            background: #0f2a48;
+            flex-shrink: 0;
+            overflow-x: auto;
+        }
+
+        .cart-tab {
+            padding: 12px 16px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            color: #7a8fa3;
+            border-bottom: 3px solid transparent;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        .cart-tab.active {
+            color: #ff3d7f;
+            border-bottom-color: #ff3d7f;
+        }
+
+        .cart-tab.add-tab {
+            color: #ff3d7f;
+            padding: 12px 8px;
+        }
+
+        .cart-items {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        /* Order Sections */
+        .order-section {
+            margin-bottom: 16px;
+            border: 1px solid #2a4a6c;
+            border-radius: 4px;
+            overflow: hidden;
+            background: #0f2a48;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #0a1f3f;
+            padding: 10px 12px;
+            border-bottom: 1px solid #2a4a6c;
+        }
+
+        .section-title {
+            font-weight: 600;
+            color: white;
+            font-size: 13px;
+        }
+
+        .edit-btn {
+            background: none;
+            border: 1px solid #ff3d7f;
+            color: #ff3d7f;
+            padding: 4px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .edit-btn:hover {
+            background: #ff3d7f;
+            color: white;
+        }
+
+        .section-items {
+            padding: 8px;
+        }
+
+        .section-items.edit-mode .cart-item-delete.hidden {
+            display: block !important;
+        }
+
+        .section-footer {
+            padding: 10px 12px;
+            border-top: 1px solid #2a4a6c;
+            text-align: center;
+            background: #0a1f3f;
+        }
+
+        .section-footer hr {
+            margin: 6px 0;
+            border: none;
+            border-top: 1px solid #2a4a6c;
+        }
+
+        .timestamp {
+            font-size: 11px;
+            color: #7a8fa3;
+        }
+
+        .confirmed-section .cart-item-thumb,
+        .confirmed-section .cart-item-name,
+        .confirmed-section .cart-item-price,
+        .confirmed-section .cart-item-total {
+            opacity: 0.6;
+            color: #5a6f83;
+        }
+
+        .confirmed-section .cart-item-thumb.grayed {
+            opacity: 0.5;
+        }
+
+        .confirmed-section .cart-item-name.grayed {
+            opacity: 0.5;
+        }
+
+        .cart-item {
+            display: grid;
+            grid-template-columns: 50px 1fr 40px 60px 60px 60px 50px;
+            gap: 8px;
+            align-items: center;
+            padding: 8px;
+            border: 1px solid #2a4a6c;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            font-size: 12px;
+            background: #0f2a48;
+            transition: all 0.2s;
+            color: white;
+        }
+
+        .cart-item.cancelled {
+            background: #0a1f3f;
+            opacity: 0.5;
+            text-decoration: line-through;
+        }
+
+        .cart-item-thumb {
+            width: 50px;
+            height: 50px;
+            background: #0a2a4a;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .cart-item-name {
+            color: white;
+            font-weight: 600;
+        }
+
+        .cart-item-qty-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        .qty-btn {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: transparent;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            color: #ff3d7f;
+        }
+
+        .qty-btn:hover {
+            background: rgba(255, 61, 127, 0.1);
+            color: #ff3d7f;
+        }
+
+        .qty-display {
+            width: 24px;
+            text-align: center;
+            color: #7a8fa3;
+        }
+
+        .cart-item-price {
+            text-align: right;
+            color: #7a8fa3;
+        }
+
+        .cart-item-total {
+            text-align: right;
+            color: #ff3d7f;
+            font-weight: 600;
+        }
+
+        .cart-item-delete {
+            cursor: pointer;
+            text-align: center;
+            color: #ff3d7f;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .delete-btn {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: transparent;
+            border-radius: 50%;
+            font-size: 18px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            color: #ff3d7f;
+            cursor: pointer;
+        }
+
+        .delete-btn:hover {
+            background: rgba(255, 61, 127, 0.1);
+        }
+
+        .delete-btn {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: transparent;
+            border-radius: 50%;
+            font-size: 18px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            color: #ff3d7f;
+            cursor: pointer;
+        }
+
+        .delete-btn:hover {
+            background: rgba(255, 61, 127, 0.1);
+        }
+
+        .cart-item-delete:hover {
+            color: #ff1493;
+        }
+
+        .cart-item-delete.disabled {
+            cursor: not-allowed;
+            color: #5a6f83;
+        }
+
+        .cart-summary {
+            padding: 12px;
+            border-top: 1px solid #2a4a6c;
+            background: #0f2a48;
+            font-size: 12px;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            color: #7a8fa3;
+        }
+
+        .summary-row.total {
+            font-size: 14px;
+            font-weight: 700;
+            color: #ff3d7f;
+            border-top: 1px solid #2a4a6c;
+            padding-top: 8px;
+            margin-top: 8px;
+        }
+
+        .summary-row.paid {
+            color: #5a6f83;
+        }
+
+        .cart-actions {
+            padding: 12px;
+            display: flex;
+            gap: 8px;
+            border-top: 1px solid #2a4a6c;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .btn-place-order {
+            background: #ff3d7f;
+            color: white;
+        }
+
+        .btn-place-order:hover:not(:disabled) {
+            background: #ff1493;
+        }
+
+        .btn-pay {
+            background: #ff3d7f;
+            color: white;
+        }
+
+        .btn-pay:hover:not(:disabled) {
+            background: #ff1493;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* ========== MODALS ========== */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            max-width: 500px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(30px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .modal-body {
+            margin-bottom: 20px;
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ff6600;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        .modal-options {
+            margin-bottom: 20px;
+        }
+
+        .modal-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-option:hover {
+            background: #f5f5f5;
+        }
+
+        .modal-option input[type="radio"] {
+            cursor: pointer;
+            accent-color: #ff6600;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        .modal-btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .modal-btn.cancel {
+            background: #4a5f7f;
+            color: white;
+        }
+
+        .modal-btn.cancel:hover {
+            background: #3a4f6f;
+        }
+
+        .modal-btn.confirm {
+            background: #ff3d7f;
+            color: white;
+        }
+
+        .modal-btn.confirm:hover {
+            background: #ff1493;
+        }
+
+        /* ========== TOAST ========== */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #ff3d7f;
+            color: white;
+            padding: 16px 24px;
+            border-radius: 4px;
+            z-index: 2000;
+            display: none;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .toast.show {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* ========== SCROLLBAR ========== */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #bbb;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #888;
+        }
+
+        /* ========== RESPONSIVE ========== */
+        @media (max-width: 1024px) {
+            .tables-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .dishes-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .order-right {
+                width: 45%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="header">
+            <span class="header-back" id="headerBack" onclick="goBack()">← Back</span>
+            <span class="header-title" id="headerTitle">Ordering</span>
+            <span class="header-badge" id="headerBadge" style="display: none;">New Order</span>
+        </div>
+
+        <div class="content">
+            <!-- TABLE SCREEN -->
+            <div class="screen table-screen active" id="tableScreen">
+                <div class="tables-grid" id="tablesGrid"></div>
+            </div>
+
+            <!-- ORDER SCREEN -->
+            <div class="screen order-screen" id="orderScreen">
+                <div class="order-left">
+                    <div class="menu-categories" id="categoriesContainer">
+                        <button class="category-btn active" onclick="switchCategory(this)">Starters</button>
+                        <button class="category-btn" onclick="switchCategory(this)">Main Courses</button>
+                        <button class="category-btn" onclick="switchCategory(this)">Drinks</button>
+                        <button class="category-btn" onclick="switchCategory(this)">Desserts</button>
+                    </div>
+                    <div class="dishes-container" id="dishesContainer"></div>
+                </div>
+                <div class="order-right">
+                    <div class="cart-header">
+                        <span class="cart-header-icon">🛒</span>
+                        <span>Shopping Cart</span>
+                    </div>
+                    <div class="cart-tabs" id="cartTabs">
+                        <button class="cart-tab active" onclick="switchTab(this, 'default')">🍴</button>
+                        <button class="cart-tab add-tab" onclick="addNewTab()">+</button>
+                    </div>
+                    <div class="cart-items" id="cartItems"></div>
+                    <div class="cart-summary">
+                        <div class="summary-row">
+                            <span>Subtotal:</span>
+                            <span id="subtotal">¥0</span>
+                        </div>
+                        <div class="summary-row paid" id="refundRow" style="display: none;">
+                            <span>Cancelled:</span>
+                            <span id="refund">-¥0</span>
+                        </div>
+                        <div class="summary-row total">
+                            <span>Total:</span>
+                            <span id="cartTotal">¥0</span>
+                        </div>
+                    </div>
+                    <div class="cart-actions">
+                        <button class="btn btn-place-order" id="placeOrderBtn" onclick="placeOrder()">PlaceOrder</button>
+                        <button class="btn btn-add-items" id="addItemsBtn" onclick="placeOrder()" style="display: none;">Add Items</button>
+                        <button class="btn btn-pay" onclick="pay()">Pay</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB BAR -->
+        <div class="tab-bar">
+            <div class="tab active" onclick="switchScreen('tableScreen', 0)">
+                <div class="tab-icon">📋</div>
+                <div class="tab-label">Ordering</div>
+            </div>
+            <div class="tab" onclick="switchScreen('aboutScreen', 1)">
+                <div class="tab-icon">ℹ️</div>
+                <div class="tab-label">About</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALS -->
+    <div class="modal" id="placeOrderModal">
+        <div class="modal-content">
+            <div class="modal-title">Confirm Order</div>
+            <div class="modal-body">
+                <div id="placeOrderSummary" style="margin-bottom: 20px; font-size: 13px; color: #666;"></div>
+                <p style="color: #ff6600; font-weight: 600; margin-bottom: 10px;">🖨️ Print kitchen ticket?</p>
+                <p style="font-size: 12px; color: #999;">This will send order to kitchen and print the ticket.</p>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" onclick="closePlaceOrderModal()">Cancel</button>
+                <button class="modal-btn confirm" onclick="confirmPlaceOrder()">Print & Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="payModal">
+        <div class="modal-content">
+            <div class="modal-title">Complete Payment</div>
+            <div class="modal-body">
+                <div id="paySummary" style="margin-bottom: 20px; font-size: 13px; color: #666;"></div>
+                <p style="color: #ff6600; font-weight: 600; margin-bottom: 10px;">🖨️ Print invoice?</p>
+                <p style="font-size: 12px; color: #999;">Invoice will be printed for the customer.</p>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" onclick="closePayModal()">Cancel</button>
+                <button class="modal-btn confirm" onclick="confirmPay()">Print Invoice & Pay</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="cancelReasonModal">
+        <div class="modal-content">
+            <div class="modal-title">Cancel Reason</div>
+            <div class="modal-body">
+                <div id="cancelDishInfo" style="margin-bottom: 20px; font-size: 13px; color: #666;"></div>
+                <div class="modal-options">
+                    <label class="modal-option">
+                        <input type="radio" name="cancelReason" value="顾客要求" checked>
+                        <span>Customer Request</span>
+                    </label>
+                    <label class="modal-option">
+                        <input type="radio" name="cancelReason" value="做坏了">
+                        <span>Damaged/Wrong</span>
+                    </label>
+                    <label class="modal-option">
+                        <input type="radio" name="cancelReason" value="上错菜">
+                        <span>Wrong Dish</span>
+                    </label>
+                    <label class="modal-option">
+                        <input type="radio" name="cancelReason" value="其他">
+                        <span>Other</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" onclick="closeCancelModal()">Cancel</button>
+                <button class="modal-btn confirm" onclick="confirmCancel()">Confirm Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="addTabModal">
+        <div class="modal-content">
+            <div class="modal-title">Add New Diner</div>
+            <div class="modal-body">
+                <p style="color: #666; font-size: 13px; margin-bottom: 12px;">Diner #<strong id="nextDinerNum">1</strong></p>
+                <input type="text" class="modal-input" id="newTabName" placeholder="Enter diner name (Optional)">
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" onclick="closeAddTabModal()">Cancel</button>
+                <button class="modal-btn confirm" onclick="confirmAddTab()">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // ========== STATE ========== 
+        const state = {
+            currentTable: null,
+            currentScreen: 'tableScreen',
+            activeTab: 'default',
+            tables: [
+                { id: 1, number: 1, capacity: 4, activeOrders: {} },
+                { id: 2, number: 2, capacity: 4, activeOrders: {} },
+                { id: 3, number: 3, capacity: 2, activeOrders: {} },
+                { id: 4, number: 4, capacity: 6, activeOrders: {} },
+                { id: 5, number: 5, capacity: 4, flashing: true, activeOrders: {} },
+                { id: 6, number: 6, capacity: 4, activeOrders: {} },
+                { id: 7, number: 7, capacity: 2, activeOrders: {} },
+                { id: 8, number: 8, capacity: 6, activeOrders: {} }
+            ],
+            dishes: {
+                'Starters': [
+                    { id: 1, name: 'Egg Curry', price: 100 },
+                    { id: 2, name: 'Aloo Massala', price: 100 },
+                    { id: 3, name: 'Samosa', price: 80 },
+                    { id: 4, name: 'Spring Roll', price: 90 }
+                ],
+                'Main Courses': [
+                    { id: 5, name: 'Veg Biriyani', price: 140 },
+                    { id: 6, name: 'CheeseBurger', price: 300 },
+                    { id: 7, name: 'Fish SalaD', price: 200 },
+                    { id: 8, name: 'Tandoori Chicken', price: 250 }
+                ],
+                'Drinks': [
+                    { id: 9, name: 'Fresh Lemon', price: 80 },
+                    { id: 10, name: 'Coke', price: 50 },
+                    { id: 11, name: 'Orange Juice', price: 90 },
+                    { id: 12, name: 'Iced Tea', price: 70 }
+                ],
+                'Desserts': [
+                    { id: 13, name: 'Gulab Jamun', price: 120 },
+                    { id: 14, name: 'Ras Malai', price: 150 },
+                    { id: 15, name: 'Ice Cream', price: 100 },
+                    { id: 16, name: 'Kheer', price: 110 }
+                ]
+            },
+            shoppingCart: {
+                'default': {
+                    tabId: 'default',
+                    name: '🍴',
+                    items: [],
+                    status: 'pending',
+                    isFromCustomerScan: false,
+                    editMode: false,
+                    confirmedAt: null
+                }
+            },
+            pendingOrders: {
+                // Table 5 has pending order from customer scan
+                '5': {
+                    'default': {
+                        tabId: 'default',
+                        name: '🍴',
+                        items: [
+                            { dishId: 5, name: 'Veg Biriyani', price: 140, qty: 2, status: 'PENDING_SCAN' },
+                            { dishId: 10, name: 'Coke', price: 50, qty: 2, status: 'PENDING_SCAN' }
+                        ],
+                        status: 'pending',
+                        isFromCustomerScan: true,
+                        scannedAt: new Date().toLocaleString()
+                    }
+                }
+            },
+            orders: [],
+            pendingCancelItem: null
+        };
+
+        // ========== RENDERING ========== 
+        function calculateTableTotal(table) {
+            // 计算该桌所有tab的已送厨菜品总金额
+            let total = 0;
+            Object.values(table.activeOrders || {}).forEach(tab => {
+                tab.items.forEach(item => {
+                    if (item.status === 'CONFIRMED') {
+                        total += item.price * item.qty;
+                    }
+                });
+            });
+            return total;
+        }
+
+        function renderTables() {
+            const grid = document.getElementById('tablesGrid');
+            grid.innerHTML = state.tables.map(table => {
+                const tableTotal = calculateTableTotal(table);
+                const totalDisplay = tableTotal > 0 ? `¥${tableTotal}` : '¥0';
+                return `
+                    <div class="table-card ${table.flashing ? 'flashing' : ''}" onclick="selectTable(${table.id})">
+                        ${table.flashing ? '<div class="table-badge">🔔</div>' : ''}
+                        <div class="table-icon">🪑</div>
+                        <div class="table-name">Table ${table.number}</div>
+                        <div class="table-total ${tableTotal > 0 ? 'active' : ''}">${totalDisplay}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderDishes(category = 'Starters') {
+            const container = document.getElementById('dishesContainer');
+            const dishes = state.dishes[category] || [];
+            container.innerHTML = dishes.map(dish => `
+                <div class="dish-card" onclick="addDish(${dish.id}, '${dish.name}', ${dish.price})">
+                    <div class="dish-placeholder"></div>
+                    <div class="dish-name">${dish.name}</div>
+                    <div class="dish-price">¥${dish.price}</div>
+                </div>
+            `).join('');
+        }
+
+        function renderCart() {
+            const activeTab = state.shoppingCart[state.activeTab];
+            const container = document.getElementById('cartItems');
+            
+            if (!activeTab || activeTab.items.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #999; padding: 40px 20px;">Empty</div>';
+                updateCartTotals();
+                updateButtonStates();
+                return;
+            }
+
+            const dishEmojis = {
+                1: '🍛', 2: '🥘', 3: '🥟', 4: '🌯',
+                5: '🍚', 6: '🍔', 7: '🥗', 8: '🍗',
+                9: '🍋', 10: '🥤', 11: '🧃', 12: '🧋',
+                13: '🧑‍🍳', 14: '🥛', 15: '🍦', 16: '🍮'
+            };
+
+            // 分组已送厨的菜品和新增菜品
+            const confirmedItems = activeTab.items.filter(item => item.status === 'CONFIRMED');
+            const draftItems = activeTab.items.filter(item => item.status === 'DRAFT' || item.status === 'PENDING_SCAN');
+            const cancelledItems = activeTab.items.filter(item => item.status === 'CANCELLED');
+
+            let html = '';
+
+            // Group confirmed items by confirmedAt time for separate sections
+            const confirmedGroups = {};
+            confirmedItems.forEach(item => {
+                const time = item.confirmedAt || new Date().toLocaleTimeString();
+                if (!confirmedGroups[time]) {
+                    confirmedGroups[time] = [];
+                }
+                confirmedGroups[time].push(item);
+            });
+
+            // Render each confirmed group as a separate section
+            Object.entries(confirmedGroups).forEach(([time, items]) => {
+                html += `
+                    <div class="order-section confirmed-section">
+                        <div class="section-header">
+                            <span class="section-title">🍴 Sent to Kitchen</span>
+                        </div>
+                        <div class="section-items">
+                `;
+                
+                items.forEach((item, idx) => {
+                    const total = item.price * item.qty;
+                    const originalIdx = activeTab.items.indexOf(item);
+                    html += `
+                        <div class="cart-item">
+                            <div class="cart-item-thumb grayed">${dishEmojis[item.dishId] || '🍽️'}</div>
+                            <div class="cart-item-name grayed">${item.name}</div>
+                            <div class="cart-item-qty-controls">
+                                <span class="qty-display">${item.qty}</span>
+                            </div>
+                            <div class="cart-item-price grayed">¥${item.price}</div>
+                            <div class="cart-item-total grayed">¥${total}</div>
+                            <button class="qty-btn delete-btn" onclick="deleteDish(${originalIdx})" title="Delete">
+                                −
+                            </button>
+                        </div>
+                    `;
+                });
+
+                html += `
+                        </div>
+                        <div class="section-footer">
+                            <hr>
+                            <span class="timestamp">Sent to Kitchen at ${time}</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Dishes Added Section
+            if (draftItems.length > 0) {
+                html += `
+                    <div class="order-section draft-section">
+                        <div class="section-header">
+                            <span class="section-title">Dishes Added</span>
+                        </div>
+                        <div class="section-items">
+                `;
+                
+                draftItems.forEach((item, idx) => {
+                    const total = item.price * item.qty;
+                    const originalIdx = activeTab.items.indexOf(item);
+                    html += `
+                        <div class="cart-item">
+                            <div class="cart-item-thumb">${dishEmojis[item.dishId] || '🍽️'}</div>
+                            <div class="cart-item-name">${item.name}</div>
+                            <div class="cart-item-qty-controls">
+                                <span class="qty-display">${item.qty}</span>
+                            </div>
+                            <div class="cart-item-price">¥${item.price}</div>
+                            <div class="cart-item-total">¥${total}</div>
+                            <button class="qty-btn delete-btn" onclick="deleteDish(${originalIdx})" title="Delete">
+                                −
+                            </button>
+                        </div>
+                    `;
+                });
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Cancelled items section
+            if (cancelledItems.length > 0) {
+                html += `
+                    <div class="order-section cancelled-section">
+                        <div class="section-header">
+                            <span class="section-title">Cancelled</span>
+                        </div>
+                        <div class="section-items">
+                `;
+                
+                cancelledItems.forEach((item, idx) => {
+                    const total = item.price * item.qty;
+                    html += `
+                        <div class="cart-item cancelled">
+                            <div class="cart-item-thumb">${dishEmojis[item.dishId] || '🍽️'}</div>
+                            <div class="cart-item-name">${item.name}</div>
+                            <div class="cart-item-qty-controls">
+                                <span class="qty-display">${item.qty}</span>
+                            </div>
+                            <div class="cart-item-price">¥${item.price}</div>
+                            <div class="cart-item-total">¥${total}</div>
+                            <div class="cart-item-delete disabled">☓</div>
+                        </div>
+                    `;
+                });
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+            updateCartTotals();
+            updateButtonStates();
+        }
+
+        function changeQty(idx, delta) {
+            const activeTab = state.shoppingCart[state.activeTab];
+            if (!activeTab) return;
+
+            const item = activeTab.items[idx];
+            
+            // Only allow qty change in DRAFT status
+            if (item.status !== 'DRAFT') return;
+            
+            // If delta is -1 and qty is 1, delete the item
+            if (delta === -1 && item.qty === 1) {
+                deleteDish(idx);
+                return;
+            }
+            
+            item.qty += delta;
+            
+            // Remove item if qty drops to 0
+            if (item.qty <= 0) {
+                activeTab.items.splice(idx, 1);
+            }
+            
+            renderCart();
+        }
+
+        function updateCartTotals() {
+            const activeTab = state.shoppingCart[state.activeTab];
+            if (!activeTab) return;
+
+            const subtotal = activeTab.items
+                .filter(item => item.status !== 'CANCELLED')
+                .reduce((sum, item) => sum + (item.price * item.qty), 0);
+
+            const refund = activeTab.items
+                .filter(item => item.status === 'CANCELLED')
+                .reduce((sum, item) => sum + (item.price * item.qty), 0);
+
+            document.getElementById('subtotal').textContent = '¥' + subtotal;
+            document.getElementById('cartTotal').textContent = '¥' + subtotal;
+
+            if (refund > 0) {
+                document.getElementById('refundRow').style.display = 'flex';
+                document.getElementById('refund').textContent = '-¥' + refund;
+            } else {
+                document.getElementById('refundRow').style.display = 'none';
+            }
+        }
+
+        function renderCartTabs() {
+            const container = document.getElementById('cartTabs');
+            const tabs = Object.values(state.shoppingCart);
+            
+            const tabsHtml = tabs.map(tab => `
+                <button class="cart-tab ${tab.tabId === state.activeTab ? 'active' : ''}" 
+                        onclick="switchTab(this, '${tab.tabId}')">
+                    ${tab.name}
+                </button>
+            `).join('');
+            
+            container.innerHTML = tabsHtml + '<button class="cart-tab add-tab" onclick="addNewTab()">+</button>';
+            
+            // Re-attach event listener to + button
+            const addBtn = container.querySelector('.add-tab');
+            if (addBtn) {
+                addBtn.onclick = () => addNewTab();
+            }
+        }
+
+        // ========== EVENT HANDLERS ========== 
+        function switchScreen(screenId, tabIndex) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            
+            document.getElementById(screenId).classList.add('active');
+            document.querySelectorAll('.tab')[tabIndex].classList.add('active');
+            
+            state.currentScreen = screenId;
+            updateHeader();
+        }
+
+        function updateHeader() {
+            const header = document.getElementById('headerTitle');
+            const back = document.getElementById('headerBack');
+            
+            if (state.currentScreen === 'tableScreen') {
+                header.textContent = 'Ordering';
+                back.classList.remove('show');
+            } else if (state.currentScreen === 'orderScreen') {
+                header.textContent = `Table ${state.currentTable} - Ordering`;
+                back.classList.add('show');
+            }
+        }
+
+        function selectTable(tableId) {
+            state.currentTable = tableId;
+            
+            // Check if there's a pending order from customer scan
+            if (state.pendingOrders[tableId]) {
+                // Load customer scan order
+                state.shoppingCart = JSON.parse(JSON.stringify(state.pendingOrders[tableId]));
+                // Ensure editMode property exists
+                Object.values(state.shoppingCart).forEach(tab => {
+                    tab.editMode = tab.editMode || false;
+                    tab.confirmedAt = tab.confirmedAt || null;
+                });
+                showToast(`✓ Customer scan order loaded. Tap PlaceOrder to confirm!`, 4000);
+            } else {
+                // Load existing orders from this table if any
+                const currentTable = state.tables.find(t => t.id === tableId);
+                if (currentTable && currentTable.activeOrders && Object.keys(currentTable.activeOrders).length > 0) {
+                    // Load existing orders
+                    state.shoppingCart = JSON.parse(JSON.stringify(currentTable.activeOrders));
+                    showToast(`Table ${tableId} selected - Existing orders loaded`);
+                } else {
+                    // Fresh order - waiter manual ordering
+                    state.shoppingCart = {
+                        'default': {
+                            tabId: 'default',
+                            name: '🍴',
+                            items: [],
+                            status: 'pending',
+                            isFromCustomerScan: false,
+                            editMode: false,
+                            confirmedAt: null
+                        }
+                    };
+                    showToast(`Table ${tableId} selected`);
+                }
+            }
+            
+            state.activeTab = 'default';
+            renderCartTabs();
+            renderCart();
+            renderDishes();
+            switchScreen('orderScreen', 0);
+        }
+
+        function simulateNewCustomerOrder() {
+            // Simulate a customer scan order coming in for Table 3
+            const tableId = 3;
+            state.pendingOrders[tableId] = {
+                'default': {
+                    tabId: 'default',
+                    name: '🍴',
+                    items: [
+                        { dishId: 1, name: 'Egg Curry', price: 100, qty: 1, status: 'PENDING_SCAN' },
+                        { dishId: 9, name: 'Fresh Lemon', price: 80, qty: 2, status: 'PENDING_SCAN' }
+                    ],
+                    status: 'pending',
+                    isFromCustomerScan: true,
+                    scannedAt: new Date().toLocaleString()
+                }
+            };
+            
+            const table = state.tables.find(t => t.id === tableId);
+            if (table) {
+                table.flashing = true;
+            }
+            
+            renderTables();
+            showToast(`🔔 New order on Table ${tableId}`, 3000);
+        }
+
+        function goBack() {
+            renderTables();
+            switchScreen('tableScreen', 0);
+        }
+
+        function switchCategory(btn) {
+            document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderDishes(btn.textContent);
+        }
+
+        function switchTab(btn, tabId) {
+            document.querySelectorAll('.cart-tab').forEach(b => b.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+            state.activeTab = tabId;
+            renderCart();
+        }
+
+        function addDish(dishId, name, price) {
+            const activeTab = state.shoppingCart[state.activeTab];
+            if (!activeTab) return;
+
+            const existing = activeTab.items.find(item => item.dishId === dishId && item.status !== 'CANCELLED');
+            
+            if (existing) {
+                existing.qty++;
+            } else {
+                activeTab.items.push({
+                    dishId,
+                    name,
+                    price,
+                    qty: 1,
+                    status: 'DRAFT'
+                });
+            }
+            
+            renderCart();
+        }
+
+        function deleteDish(idx) {
+            const activeTab = state.shoppingCart[state.activeTab];
+            if (!activeTab) return;
+
+            const item = activeTab.items[idx];
+            
+            if (item.status === 'DRAFT') {
+                activeTab.items.splice(idx, 1);
+                renderCart();
+            } else if (item.status === 'CONFIRMED') {
+                state.pendingCancelItem = idx;
+                document.getElementById('cancelDishInfo').textContent = 
+                    `${item.name} x${item.qty} (¥${item.price * item.qty})`;
+                document.getElementById('cancelReasonModal').classList.add('active');
+            }
+        }
+
+        function closeCancelModal() {
+            document.getElementById('cancelReasonModal').classList.remove('active');
+            state.pendingCancelItem = null;
+        }
+
+        function confirmCancel() {
+            const activeTab = state.shoppingCart[state.activeTab];
+            const idx = state.pendingCancelItem;
+            
+            if (activeTab && activeTab.items[idx]) {
+                const reason = document.querySelector('input[name="cancelReason"]:checked').value;
+                activeTab.items[idx].status = 'CANCELLED';
+                activeTab.items[idx].cancelReason = reason;
+                activeTab.items[idx].cancelledAt = new Date().toLocaleString();
+                
+                renderCart();
+                showToast(`Dish cancelled: ${reason}`);
+            }
+            
+            closeCancelModal();
+        }
+
+        function addNewTab() {
+            const nextDinerNum = Object.keys(state.shoppingCart).length;
+            document.getElementById('nextDinerNum').textContent = nextDinerNum;
+            document.getElementById('addTabModal').classList.add('active');
+            document.getElementById('newTabName').value = '';
+            document.getElementById('newTabName').focus();
+        }
+
+        function closeAddTabModal() {
+            document.getElementById('addTabModal').classList.remove('active');
+        }
+
+        function confirmAddTab() {
+            const dinerNum = Object.keys(state.shoppingCart).length; // 1, 2, 3...
+            const name = document.getElementById('newTabName').value.trim() || `Diner ${dinerNum}`;
+            const tabId = 'tab-' + dinerNum;
+            
+            state.shoppingCart[tabId] = {
+                tabId,
+                name: dinerNum.toString(), // Just show number: 1, 2, 3...
+                items: [],
+                status: 'pending',
+                isFromCustomerScan: false,
+                editMode: false,
+                confirmedAt: null
+            };
+            
+            state.activeTab = tabId;
+            renderCartTabs();
+            renderCart();
+            switchTab(null, tabId);
+            
+            closeAddTabModal();
+            showToast(`✓ New diner tab ${dinerNum} added: ${name}`);
+        }
+
+        function placeOrder() {
+            const activeTab = state.shoppingCart[state.activeTab];
+            if (!activeTab || activeTab.items.length === 0) {
+                showToast('No items in cart');
+                return;
+            }
+
+            // Check if this is the first order or adding items
+            const draftItems = activeTab.items.filter(item => item.status === 'DRAFT' || item.status === 'PENDING_SCAN');
+            if (draftItems.length === 0) {
+                showToast('No new items to place order');
+                return;
+            }
+
+            const dinerNum = state.activeTab === 'default' ? 0 : state.activeTab.replace('tab-', '');
+            const isAddingItems = activeTab.status === 'CONFIRMED';
+            
+            const summary = `
+                <strong>Table ${state.currentTable} - Diner ${dinerNum}</strong><br>
+                ${draftItems.map(item => `${item.name} × ${item.qty}`).join('<br>')}<br><br>
+                <strong>Total: ¥${draftItems.reduce((sum, item) => sum + (item.price * item.qty), 0)}</strong>
+            `;
+            
+            document.getElementById('placeOrderSummary').innerHTML = summary;
+            document.getElementById('placeOrderModal').classList.add('active');
+            document.getElementById('placeOrderModalTitle').textContent = isAddingItems ? 'Add Items to Order' : 'Confirm Order';
+        }
+
+        function closePlaceOrderModal() {
+            document.getElementById('placeOrderModal').classList.remove('active');
+        }
+
+        function confirmPlaceOrder() {
+            const activeTab = state.shoppingCart[state.activeTab];
+            if (!activeTab) return;
+
+            const isAddingItems = activeTab.status === 'CONFIRMED';
+
+            // Mark new items as CONFIRMED
+            activeTab.items.forEach(item => {
+                if (item.status === 'PENDING_SCAN' || item.status === 'DRAFT') {
+                    item.status = 'CONFIRMED';
+                    item.confirmedAt = new Date().toLocaleString();
+                }
+            });
+
+            if (!isAddingItems) {
+                activeTab.status = 'CONFIRMED';
+                activeTab.confirmedAt = new Date().toLocaleTimeString();
+            } else {
+                // Mark second order time for new items
+                activeTab.confirmedAt = new Date().toLocaleTimeString();
+            }
+            
+            // Save order to table's activeOrders
+            const currentTable = state.tables.find(t => t.id === state.currentTable);
+            if (currentTable && !currentTable.activeOrders) {
+                currentTable.activeOrders = {};
+            }
+            if (currentTable) {
+                currentTable.activeOrders[state.activeTab] = JSON.parse(JSON.stringify(activeTab));
+            }
+            
+            // Clear from pending orders if it was from customer scan
+            if (activeTab.isFromCustomerScan) {
+                delete state.pendingOrders[state.currentTable];
+                if (currentTable) {
+                    currentTable.flashing = false;
+                }
+            }
+            
+            renderCart();
+            closePlaceOrderModal();
+            
+            // Print kitchen ticket
+            printKitchenTicket();
+            showToast(isAddingItems ? '✓ New items sent to kitchen!' : '✓ Order sent to kitchen!');
+        }
+
+        function printKitchenTicket() {
+            const activeTab = state.shoppingCart[state.activeTab];
+            const dinerNum = state.activeTab === 'default' ? 0 : state.activeTab.replace('tab-', '');
+            
+            const content = `
+╔═══════════════════════════════════╗
+║       🍳 KITCHEN TICKET 🍳       ║
+╠═══════════════════════════════════╣
+║ TABLE: ${state.currentTable} | DINER: ${dinerNum}${' '.repeat(16 - String(dinerNum).length)}║
+╠═══════════════════════════════════╣
+${activeTab.items.filter(i => i.status === 'CONFIRMED').map((item, idx) => {
+    const line = `║ ${(idx+1).toString().padEnd(2)} × ${item.name.padEnd(25)} ${item.qty.toString().padStart(2)} ║`;
+    return line.substring(0, 36) + '║';
+}).join('\n')}
+╠═══════════════════════════════════╣
+║ Time: ${new Date().toLocaleTimeString().padEnd(25)}  ║
+╚═══════════════════════════════════╝
+            `;
+            
+            console.log('\n' + content);
+            alert('📋 Kitchen ticket printed!\n\n' + content);
+        }
+
+        function pay() {
+            const activeTab = state.shoppingCart[state.activeTab];
+            if (!activeTab || activeTab.items.length === 0) {
+                showToast('No items to pay');
+                return;
+            }
+
+            const confirmedItems = activeTab.items.filter(item => item.status === 'CONFIRMED');
+            if (confirmedItems.length === 0) {
+                showToast('Please place order first');
+                return;
+            }
+
+            const subtotal = confirmedItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            const cancelled = activeTab.items.filter(item => item.status === 'CANCELLED')
+                .reduce((sum, item) => sum + (item.price * item.qty), 0);
+            const total = subtotal - cancelled;
+
+            const dinerNum = state.activeTab === 'default' ? 0 : state.activeTab.replace('tab-', '');
+            const summary = `
+                <strong>Table ${state.currentTable} - Diner ${dinerNum}</strong><br>
+                Subtotal: ¥${subtotal}<br>
+                ${cancelled > 0 ? `Cancelled: -¥${cancelled}<br>` : ''}
+                <strong style="font-size: 14px;">Total: ¥${total}</strong>
+            `;
+            
+            document.getElementById('paySummary').innerHTML = summary;
+            document.getElementById('payModal').classList.add('active');
+        }
+
+        function closePayModal() {
+            document.getElementById('payModal').classList.remove('active');
+        }
+
+        function confirmPay() {
+            const activeTab = state.shoppingCart[state.activeTab];
+            if (!activeTab) return;
+
+            // Mark all CONFIRMED items as PAID
+            activeTab.items.forEach(item => {
+                if (item.status === 'CONFIRMED') {
+                    item.status = 'PAID';
+                    item.paidAt = new Date().toLocaleString();
+                }
+            });
+
+            activeTab.status = 'PAID';
+            renderCart();
+            closePayModal();
+            
+            // Print invoice
+            printInvoice();
+            showToast('✓ Payment completed!');
+        }
+
+        function printInvoice() {
+            const activeTab = state.shoppingCart[state.activeTab];
+            const dinerNum = state.activeTab === 'default' ? 0 : state.activeTab.replace('tab-', '');
+            
+            const subtotal = activeTab.items
+                .filter(i => i.status === 'CONFIRMED' || i.status === 'PAID')
+                .reduce((sum, item) => sum + (item.price * item.qty), 0);
+            
+            const cancelled = activeTab.items
+                .filter(i => i.status === 'CANCELLED')
+                .reduce((sum, item) => sum + (item.price * item.qty), 0);
+            
+            const total = subtotal - cancelled;
+
+            const content = `
+╔═══════════════════════════════════╗
+║         📄 INVOICE 📄              ║
+╠═══════════════════════════════════╣
+║ TABLE: ${state.currentTable} | DINER: ${dinerNum}${' '.repeat(16 - String(dinerNum).length)}║
+╠═══════════════════════════════════╣
+║ Item                        Price ║
+╠═══════════════════════════════════╣
+${activeTab.items.filter(i => i.status !== 'CANCELLED').map(item => {
+    const line = `║ ${item.name.padEnd(20)} ¥${(item.price * item.qty).toString().padStart(8)} ║`;
+    return line.substring(0, 36) + '║';
+}).join('\n')}
+╠═══════════════════════════════════╣
+║ Subtotal:                   ¥${subtotal.toString().padStart(8)} ║
+${cancelled > 0 ? `║ Cancelled:                 -¥${cancelled.toString().padStart(7)} ║\n` : ''}║ TOTAL:                      ¥${total.toString().padStart(8)} ║
+╠═══════════════════════════════════╣
+║ Time: ${new Date().toLocaleTimeString().padEnd(25)}  ║
+║ Thank you! 😊                     ║
+╚═══════════════════════════════════╝
+            `;
+            
+            console.log('\n' + content);
+            alert('🖨️ Invoice printed!\n' + content);
+        }
+
+        function toggleEditMode(tabId) {
+            const tab = state.shoppingCart[tabId];
+            if (!tab) return;
+            
+            tab.editMode = !tab.editMode;
+            renderCart();
+        }
+
+        function updateButtonStates() {
+            const activeTab = state.shoppingCart[state.activeTab];
+            const placeOrderBtn = document.getElementById('placeOrderBtn');
+            const addItemsBtn = document.getElementById('addItemsBtn');
+            
+            if (!activeTab) return;
+            
+            const hasDraftItems = activeTab.items.some(item => item.status === 'DRAFT' || item.status === 'PENDING_SCAN');
+            const isConfirmed = activeTab.status === 'CONFIRMED';
+            
+            if (isConfirmed) {
+                // Show "Add Items" button after first order
+                placeOrderBtn.style.display = 'none';
+                addItemsBtn.style.display = 'flex';
+                addItemsBtn.disabled = !hasDraftItems;
+                addItemsBtn.textContent = hasDraftItems ? 'Add Items' : 'No New Items';
+            } else {
+                // Show "Place Order" button for first order
+                placeOrderBtn.style.display = 'flex';
+                addItemsBtn.style.display = 'none';
+                placeOrderBtn.disabled = !hasDraftItems;
+            }
+        }
+
+        function showToast(message, duration = 3000) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), duration);
+        }
+
+        // ========== INIT ========== 
+        function init() {
+            renderTables();
+            renderDishes();
+        }
+
+        init();
+    </script>
+</body>
+</html>

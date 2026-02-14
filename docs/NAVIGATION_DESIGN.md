@@ -1,6 +1,213 @@
-# 导航结构对比与设计说明
+# eMenuApp 导航结构设计 - 文档索引
 
-## 📊 新 vs 旧
+> 📌 **最新版本 (v4)** - 2025-12-09
+>
+> 基于餐馆老板实际需求重新设计的 Waiter 点菜系统
+
+## 📚 文档列表
+
+### ✅ 最新设计 (推荐)
+- **[NAVIGATION_DESIGN_V4.md](./NAVIGATION_DESIGN_V4.md)** - 完整的 v4 架构设计
+  - TableScreen → OrderScreen 直接流程
+  - 多 Tab 购物车设计（类似 Excel）
+  - 退菜流程（CONFIRMED 状态可退，需记录原因）
+  - 完整的 Redux 状态设计、API 设计、数据库 Schema
+
+### 📜 历史文档
+- **[NAVIGATION_REDESIGN.md](./NAVIGATION_REDESIGN.md)** - v3 架构 (2025-11-29)
+  - Stack Navigator + Tablet 分屏设计
+  - TableScreen 卡片 + DinersModal
+  - 已过时，仅供参考
+
+- **[REDUX_NAVIGATION_GUIDE.md](./REDUX_NAVIGATION_GUIDE.md)** - v2 (2025-11-25)
+  - Redux 集成指南
+  - 已过时，仅供参考
+
+---
+
+## 🚀 快速开始
+
+### 核心理解（5 分钟）
+
+1. **TableScreen**：8 个桌位网格
+   - 点击桌位 → 直接进 OrderScreen
+
+2. **OrderScreen**：点菜页面
+   - 左侧：菜品分类 + 菜单
+   - 右侧：多 Tab 购物车（支持分餐）
+     - 默认 1 个 Tab "整桌"
+     - `+` 号创建分餐 Tab
+     - 每个 Tab 独立的菜品列表和支付
+
+3. **购物车菜品状态**
+   ```
+   DRAFT → CONFIRMED → PAID
+                    ↓
+                  CANCELLED (仅 CONFIRMED 时可)
+   ```
+
+4. **关键流程**
+   - 加菜：左侧选菜 → 自动加到当前 Tab
+   - PlaceOrder：当前 Tab 的所有菜 DRAFT → CONFIRMED
+   - 退菜：CONFIRMED 状态可删除，需选择原因
+   - Pay：计算总价（排除已退菜）→ 菜品状态变 PAID
+
+---
+
+## 📊 架构概览
+
+```
+App
+├─ TableScreen (桌位选择)
+│  └─ OrderScreen (点菜 + 购物车)
+│     ├─ 左侧：Dishes (菜品分类 + 菜单)
+│     └─ 右侧：ShoppingCart
+│        ├─ [整桌] [Alice] [Bob] [+]  (多 Tab)
+│        ├─ 菜品表格 (Excel 风格)
+│        ├─ 总计/实付
+│        └─ [PlaceOrder] [Pay] (按钮)
+│
+└─ Redux State
+   ├─ currentOrder (当前桌的多 Tab 购物车)
+   ├─ allOrders (历史订单)
+   ├─ tables (桌位信息)
+   └─ notifications (新订单提醒)
+```
+
+---
+
+## 🔄 完整流程示例
+
+### Scenario: 4 个人一张桌，2 人分开支付
+
+```
+1️⃣ TableScreen
+   点击 Table 5 → 进 OrderScreen
+
+2️⃣ OrderScreen - 初始状态
+   右侧: [整桌] [+]
+   
+3️⃣ 为 "整桌" Tab 加共享菜（如饺子）
+   - 左侧选 "Dumplings" → 加 2 份
+   - 右侧表格显示菜品
+
+4️⃣ 点 [+] 创建分餐
+   → 弹出输入框 / 自动命名 Tab 2
+   → 切换到新 Tab
+
+5️⃣ 为 Tab 2 (Alice) 加菜
+   - 左侧选 "Steak" → 加 1 份
+   - 右侧表格更新
+
+6️⃣ 重复 4️⃣-5️⃣，为 Tab 3 (Bob) 加菜
+
+7️⃣ 全部加好菜后，PlaceOrder
+   - 点 [PlaceOrder]
+   - 所有菜 DRAFT → CONFIRMED
+   - 右侧表格菜品标签改为 "已确认"
+
+8️⃣ 取消某道菜（例: Alice 不要 Steak）
+   - 切换到 Alice 的 Tab
+   - 找到 Steak 行，点 [删除]
+   - 弹出 "退菜原因" Modal
+   - 选择原因 → 确认
+   - 表格更新：Steak 显示删除线 + 灰色
+
+9️⃣ 支付
+   - 先支付 Alice：点 [Pay] → 计算金额（排除已退菜）
+   - 再支付 Bob：切换 Tab，点 [Pay]
+   - 共享菜：可单独支付 "整桌" Tab，或混入其他 Tab
+
+✅ 订单完成
+```
+
+---
+
+## 💡 关键设计决策
+
+### 为什么简化成这样？
+
+| 特性 | v3 (旧) | v4 (新) | 原因 |
+|------|--------|--------|------|
+| TableScreen → MenuScreen | Stack 导航 | 直接进 OrderScreen | 减少步骤，更快 |
+| Diner 选择 | 前置 DinersModal | 在 OrderScreen 创建 Tab | 更灵活，支持动态分餐 |
+| 购物车 | 单菜品列表 | 多 Tab (Excel 风格) | 清晰的分账视图 |
+| 退菜 | 复杂的多状态 | CONFIRMED 时可退 | 与餐馆实际流程一致 |
+| 支付 | 菜品级别 | Tab 级别 | 简化计算，符合分餐需求 |
+
+### 为什么 CONFIRMED 才能退菜？
+
+1. **前端验证**：DRAFT 直接删除，无需通知后端
+2. **后端通知**：CONFIRMED 后已发送厨房，需记录取消
+3. **已支付**：Pay 后不处理（餐馆线下退款）
+
+---
+
+## 🛠️ 实现建议
+
+### 前端（React Native）
+
+1. **TableScreen**
+   ```jsx
+   const [tables, setTables] = useState([...]);
+   
+   const handleTablePress = (tableId) => {
+     dispatch(setCurrentTable(tableId));
+     navigation.navigate('OrderScreen');
+   };
+   ```
+
+2. **OrderScreen**
+   ```jsx
+   const [activeTabId, setActiveTabId] = useState('default');
+   const activeTab = tabs[activeTabId];
+   
+   const handleAddDish = (dish) => {
+     dispatch(addToCart({ tabId: activeTabId, dish }));
+   };
+   
+   const handleDeleteDish = (dishId) => {
+     const item = activeTab.items.find(i => i.dishId === dishId);
+     if (item.status === 'DRAFT') {
+       dispatch(removeFromCart({ tabId: activeTabId, dishId }));
+     } else if (item.status === 'CONFIRMED') {
+       openCancelReasonModal(dishId);
+     }
+   };
+   ```
+
+3. **Redux**
+   ```javascript
+   orderSlice.addToCart({ tabId, dish })
+   orderSlice.placeOrder({ tabId })
+   orderSlice.cancelDish({ tabId, dishId, reason })
+   orderSlice.pay({ tabId, amount })
+   ```
+
+### 后端（Node.js / Python）
+
+1. **PlaceOrder**
+   - 更新 order_items.status: DRAFT → CONFIRMED
+   - 记录 confirmed_at
+
+2. **CancelDish**
+   - 验证 status = CONFIRMED
+   - 更新 status = CANCELLED，记录原因
+   - 通知厨房 (可选)
+
+3. **Pay**
+   - 计算总额（排除 CANCELLED）
+   - 更新 status = PAID，记录 paid_at
+   - 返回订单完成
+
+---
+
+## 📞 支持
+
+- 问题？查看 [NAVIGATION_DESIGN_V4.md](./NAVIGATION_DESIGN_V4.md)
+- 想要图片原型？（待生成）
+- 代码实现？（待开发）
+
 
 ### ❌ 旧结构 (WhatsMenu)
 ```
@@ -17,6 +224,7 @@ RootNavigator (Stack)
 - ❌ Orders 是在 Stack 层级，会完全覆盖 Tab
 - ❌ 从 Orders 无法快速回到 Tables 或其他功能
 - ❌ 无法同时显示 Tab 和 Orders
+
 
 ---
 

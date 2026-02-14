@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>eMenu Waiter App - v3 (WhatsMenu Style)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #333;
+            color: #333;
+            overflow: hidden;
+        }
+
+        /* ========== LAYOUT ========== */
+        .app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* ========== HEADER ========== */
+        .header {
+            background: #2a2a2a;
+            color: #ff6600;
+            padding: 12px 20px;
+            font-size: 20px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-back {
+            cursor: pointer;
+            font-size: 24px;
+            color: #ff6600;
+        }
+
+        .header-title {
+            flex: 1;
+        }
+
+        .header-button {
+            background: #ff6600;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .header-button:hover {
+            background: #e55a00;
+        }
+
+        /* ========== TAB BAR ========== */
+        .tab-bar {
+            display: flex;
+            background: #2a2a2a;
+            border-top: 1px solid #444;
+            height: 60px;
+        }
+
+        .tab {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: #888;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            color: #ff6600;
+            border-bottom-color: #ff6600;
+        }
+
+        .tab:hover {
+            background: #333;
+        }
+
+        .tab-icon {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+
+        .tab-label {
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        /* ========== SCREENS ========== */
+        .screen {
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+
+        .screen.active {
+            display: flex;
+        }
+
+        /* ========== TABLE SCREEN ========== */
+        .table-screen {
+            flex-direction: column;
+            background: #b0b0b0;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .tables-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            flex: 1;
+        }
+
+        .table-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            min-height: 180px;
+            position: relative;
+        }
+
+        .table-card:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .table-icon {
+            font-size: 60px;
+            margin-bottom: 12px;
+        }
+
+        .table-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .table-total {
+            font-size: 16px;
+            color: #ff6600;
+            font-weight: 700;
+        }
+
+        .table-diners {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            max-width: 80%;
+        }
+
+        .diner-badge {
+            background: #ff6600;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        /* ========== MENU SCREEN (Split Layout) ========== */
+        .menu-screen {
+            flex-direction: row;
+        }
+
+        .menu-left {
+            flex: 1;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #ddd;
+            overflow: hidden;
+        }
+
+        .menu-categories {
+            display: flex;
+            gap: 8px;
+            padding: 12px;
+            overflow-x: auto;
+            border-bottom: 1px solid #eee;
+            flex-shrink: 0;
+        }
+
+        .category-btn {
+            background: white;
+            border: 2px solid #ff6600;
+            color: #ff6600;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        .category-btn.active {
+            background: #ff6600;
+            color: white;
+        }
+
+        .category-btn:hover {
+            background: #fff0e6;
+        }
+
+        .dishes-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .dish-card {
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .dish-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .dish-placeholder {
+            width: 100%;
+            height: 100px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+
+        .dish-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .dish-price {
+            font-size: 14px;
+            color: #ff6600;
+            font-weight: 700;
+        }
+
+        .menu-right {
+            width: 35%;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #ddd;
+        }
+
+        .cart-header {
+            background: #2a2a2a;
+            color: #ff6600;
+            padding: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cart-header-icon {
+            font-size: 20px;
+        }
+
+        .cart-items {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        .cart-item {
+            background: white;
+            border: 2px solid #ff6600;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .cart-item-info {
+            flex: 1;
+        }
+
+        .cart-item-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .cart-item-price {
+            font-size: 13px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .cart-item-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .cart-btn {
+            background: #ff6600;
+            color: white;
+            border: none;
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .cart-btn:hover {
+            background: #e55a00;
+        }
+
+        .cart-qty {
+            width: 28px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .cart-footer {
+            padding: 12px;
+            border-top: 1px solid #ddd;
+        }
+
+        .cart-summary {
+            text-align: right;
+            margin-bottom: 12px;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .cart-total {
+            text-align: right;
+            font-size: 18px;
+            font-weight: 700;
+            color: #ff6600;
+            margin-bottom: 12px;
+        }
+
+        .menu-screen .header-button {
+            margin-left: auto;
+        }
+
+        /* ========== ORDERS SCREEN (Split Layout) ========== */
+        .orders-screen {
+            flex-direction: row;
+        }
+
+        .orders-left {
+            flex: 1;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #ddd;
+            overflow: hidden;
+        }
+
+        .orders-categories {
+            display: flex;
+            gap: 8px;
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            flex-shrink: 0;
+        }
+
+        .orders-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .order-group {
+            margin-bottom: 16px;
+        }
+
+        .order-group-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 8px;
+            padding: 8px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .order-group.collapsed .order-subgroup {
+            display: none;
+        }
+
+        .order-subgroup {
+            background: #fafafa;
+            border-left: 3px solid #ff6600;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .order-subgroup-header {
+            padding: 8px 12px;
+            background: #f5f5f5;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .order-items {
+            padding: 8px 12px;
+        }
+
+        .order-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            font-size: 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .order-item:last-child {
+            border-bottom: none;
+        }
+
+        .order-item-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: #ff6600;
+        }
+
+        .order-item-name {
+            flex: 1;
+            color: #333;
+        }
+
+        .order-item-price {
+            color: #666;
+            min-width: 40px;
+            text-align: right;
+        }
+
+        .order-item.paid {
+            opacity: 0.6;
+            text-decoration: line-through;
+        }
+
+        .order-item.paid .order-item-checkbox {
+            accent-color: #666;
+        }
+
+        .orders-right {
+            width: 40%;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #ddd;
+        }
+
+        .receipt-header {
+            background: #2a2a2a;
+            color: #ff6600;
+            padding: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .receipt-header-icon {
+            font-size: 20px;
+        }
+
+        .receipt-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .restaurant-logo {
+            font-size: 40px;
+            margin-bottom: 12px;
+        }
+
+        .restaurant-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .restaurant-addr {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 16px;
+        }
+
+        .receipt-section {
+            text-align: left;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 12px;
+        }
+
+        .receipt-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            margin-bottom: 6px;
+            color: #333;
+        }
+
+        .receipt-row.label {
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .receipt-total {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ff6600;
+            text-align: right;
+            margin-top: 8px;
+        }
+
+        .orders-right .footer-buttons {
+            display: flex;
+            gap: 8px;
+            padding: 12px;
+            border-top: 1px solid #ddd;
+        }
+
+        .orders-right .footer-buttons button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .btn-generate {
+            background: #ff6600;
+            color: white;
+        }
+
+        .btn-generate:hover {
+            background: #e55a00;
+        }
+
+        .btn-mark-paid {
+            background: #ff6600;
+            color: white;
+        }
+
+        .btn-mark-paid:hover {
+            background: #e55a00;
+        }
+
+        /* ========== MODAL ========== */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            min-width: 400px;
+            max-width: 600px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .modal-tabs {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .modal-tab {
+            padding: 8px 16px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            color: #999;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .modal-tab.active {
+            color: #ff6600;
+            border-bottom-color: #ff6600;
+        }
+
+        .modal-tab-content {
+            display: none;
+        }
+
+        .modal-tab-content.active {
+            display: block;
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ff6600;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        .modal-btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .modal-btn.cancel {
+            background: #8b6f47;
+            color: white;
+        }
+
+        .modal-btn.cancel:hover {
+            background: #6d5937;
+        }
+
+        .modal-btn.confirm {
+            background: #ff6600;
+            color: white;
+        }
+
+        .modal-btn.confirm:hover {
+            background: #e55a00;
+        }
+
+        /* ========== ALERTS ========== */
+        .alert {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #ff6600;
+            color: white;
+            padding: 16px 24px;
+            border-radius: 4px;
+            z-index: 2000;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* ========== SCROLLBAR ========== */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #bbb;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="content">
+            <!-- TABLE SCREEN -->
+            <div class="screen table-screen active" id="tableScreen">
+                <div class="tables-grid" id="tablesGrid"></div>
+            </div>
+
+            <!-- MENU SCREEN (Hidden by default) -->
+            <div class="screen menu-screen" id="menuScreen">
+                <div class="menu-left">
+                    <div class="menu-categories" id="categoriesContainer">
+                        <button class="category-btn active" onclick="switchCategory(this)">Starters</button>
+                        <button class="category-btn" onclick="switchCategory(this)">Main Courses</button>
+                        <button class="category-btn" onclick="switchCategory(this)">Drinks</button>
+                        <button class="category-btn" onclick="switchCategory(this)">Desserts</button>
+                    </div>
+                    <div class="dishes-container" id="dishesContainer"></div>
+                </div>
+                <div class="menu-right">
+                    <div class="cart-header">
+                        <span class="cart-header-icon">🛒</span>
+                        <span>Cart</span>
+                    </div>
+                    <div class="cart-items" id="cartItems"></div>
+                    <div class="cart-footer">
+                        <div class="cart-summary">Subtotal:</div>
+                        <div class="cart-total" id="cartTotal">¥0</div>
+                        <button class="header-button" style="width: 100%;" onclick="printOrder()">Print Order</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ORDERS SCREEN -->
+            <div class="screen orders-screen" id="ordersScreen">
+                <div class="orders-left">
+                    <div class="orders-categories">
+                        <button class="category-btn active">To Pay</button>
+                        <button class="category-btn">Paid</button>
+                    </div>
+                    <div class="orders-list" id="ordersList"></div>
+                </div>
+                <div class="orders-right">
+                    <div class="receipt-header">
+                        <span class="receipt-header-icon">🧾</span>
+                        <span>Receipt</span>
+                    </div>
+                    <div class="receipt-content" id="receiptContent">
+                        <div class="restaurant-logo">🏪</div>
+                        <div class="restaurant-name">Restaurant Name</div>
+                        <div class="restaurant-addr">Address Line</div>
+                        <div class="receipt-section" id="receiptItems"></div>
+                        <div class="receipt-total" id="receiptTotal">¥0</div>
+                    </div>
+                    <div class="footer-buttons">
+                        <button class="btn-generate" onclick="generateInvoice()">Generate Invoice</button>
+                        <button class="btn-mark-paid" onclick="markAsPaid()">Mark Paid</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB BAR -->
+        <div class="tab-bar">
+            <div class="tab active" onclick="switchScreen('tableScreen', 0)">
+                <div class="tab-icon">📋</div>
+                <div class="tab-label">Ordering</div>
+            </div>
+            <div class="tab" onclick="switchScreen('ordersScreen', 1)">
+                <div class="tab-icon">📊</div>
+                <div class="tab-label">Orders</div>
+            </div>
+            <div class="tab" onclick="switchScreen('aboutScreen', 2)">
+                <div class="tab-icon">ℹ️</div>
+                <div class="tab-label">About</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DINERS MODAL -->
+    <div class="modal" id="dinersModal">
+        <div class="modal-content">
+            <div class="modal-title">Select Diner</div>
+            <div class="modal-tabs" id="dinerTabs"></div>
+            <input type="text" class="modal-input" id="dinerNameInput" placeholder="Enter Diner Name (Optional)">
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" onclick="closeDinersModal()">Cancel</button>
+                <button class="modal-btn confirm" onclick="confirmDiner()">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ALERT -->
+    <div class="alert" id="alert"></div>
+
+    <script>
+        // ========== STATE MANAGEMENT ==========
+        const state = {
+            currentTable: null,
+            currentDiner: null,
+            tables: [
+                { id: 1, name: 'Table 1', diners: ['0', 'A', 'B', 'C'] },
+                { id: 2, name: 'Table 2', diners: ['0', 'A'] },
+                { id: 3, name: 'Table 3', diners: ['0'] },
+                { id: 4, name: 'Table 4', diners: ['0', 'A'] },
+                { id: 5, name: 'Table 5', diners: ['0', 'A', 'B', 'C', 'D'] },
+                { id: 6, name: 'Table 6', diners: ['0'] },
+                { id: 7, name: 'Table 7', diners: ['0', 'A'] },
+                { id: 8, name: 'Table 8', diners: ['0'] }
+            ],
+            dishes: {
+                'Starters': [
+                    { id: 1, name: 'Egg Curry', price: 100 },
+                    { id: 2, name: 'Aloo Massala Gr...', price: 100 },
+                    { id: 3, name: 'Veg Biriyani', price: 140 },
+                    { id: 4, name: 'Fish SalaD', price: 200 }
+                ],
+                'Main Courses': [
+                    { id: 5, name: 'CheeseBurger', price: 300 },
+                    { id: 6, name: 'Grilled Chicken', price: 250 },
+                    { id: 7, name: 'Tandoori Fish', price: 320 }
+                ],
+                'Drinks': [
+                    { id: 8, name: 'Fresh Lemon', price: 80 },
+                    { id: 9, name: 'Coke', price: 50 },
+                    { id: 10, name: 'Orange Juice', price: 90 }
+                ],
+                'Desserts': [
+                    { id: 11, name: 'Gulab Jamun', price: 120 },
+                    { id: 12, name: 'Ras Malai', price: 150 },
+                    { id: 13, name: 'Ice Cream', price: 100 }
+                ]
+            },
+            shoppingCart: {},
+            orders: [
+                {
+                    id: 'ord1',
+                    tableId: 2,
+                    diner: '0',
+                    dinersName: 'Diner 1',
+                    items: [
+                        { dishId: 3, name: 'Veg Biriyani', price: 140, qty: 1, paid: false },
+                        { dishId: 5, name: 'CheeseBurger', price: 300, qty: 1, paid: false }
+                    ]
+                },
+                {
+                    id: 'ord2',
+                    tableId: 2,
+                    diner: 'A',
+                    dinersName: 'Alice',
+                    items: [
+                        { dishId: 3, name: 'Veg Biriyani', price: 140, qty: 1, paid: true },
+                        { dishId: 5, name: 'CheeseBurger', price: 300, qty: 1, paid: false }
+                    ]
+                }
+            ],
+            selectedInvoiceItems: new Set()
+        };
+
+        // ========== UI RENDERING ==========
+        function renderTables() {
+            const grid = document.getElementById('tablesGrid');
+            grid.innerHTML = state.tables.map(table => `
+                <div class="table-card" onclick="selectTable(${table.id})">
+                    <div class="table-diners">
+                        ${table.diners.map((d, i) => 
+                            `<div class="diner-badge" title="Diner ${d}">${d}</div>`
+                        ).join('')}
+                    </div>
+                    <div class="table-icon">🪑</div>
+                    <div class="table-name">${table.name}</div>
+                    <div class="table-total">¥0</div>
+                </div>
+            `).join('');
+        }
+
+        function renderDishes(category = 'Starters') {
+            const container = document.getElementById('dishesContainer');
+            const dishes = state.dishes[category] || [];
+            container.innerHTML = dishes.map(dish => `
+                <div class="dish-card" onclick="addToCart(${dish.id}, '${dish.name}', ${dish.price})">
+                    <div class="dish-placeholder"></div>
+                    <div class="dish-name">${dish.name}</div>
+                    <div class="dish-price">¥${dish.price}</div>
+                </div>
+            `).join('');
+        }
+
+        function renderCart() {
+            const container = document.getElementById('cartItems');
+            const items = Object.entries(state.shoppingCart);
+            
+            if (items.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #999; padding: 40px 20px;">Empty Cart</div>';
+                return;
+            }
+
+            container.innerHTML = items.map(([dishId, item]) => `
+                <div class="cart-item">
+                    <div class="cart-item-info">
+                        <div class="cart-item-name">${item.name}</div>
+                        <div class="cart-item-price">¥${item.price} x ${item.qty}</div>
+                    </div>
+                    <div class="cart-item-controls">
+                        <button class="cart-btn" onclick="removeFromCart(${dishId})">−</button>
+                        <div class="cart-qty">${item.qty}</div>
+                        <button class="cart-btn" onclick="addToCart(${dishId}, '${item.name}', ${item.price})">+</button>
+                    </div>
+                </div>
+            `).join('');
+
+            updateCartTotal();
+        }
+
+        function updateCartTotal() {
+            const total = Object.values(state.shoppingCart).reduce((sum, item) => sum + (item.price * item.qty), 0);
+            document.getElementById('cartTotal').textContent = '¥' + total;
+        }
+
+        function renderOrders() {
+            const list = document.getElementById('ordersList');
+            const grouped = {};
+
+            state.orders.forEach(order => {
+                const tableKey = `Table ${order.tableId}`;
+                if (!grouped[tableKey]) grouped[tableKey] = [];
+                grouped[tableKey].push(order);
+            });
+
+            list.innerHTML = Object.entries(grouped).map(([tableKey, orders]) => `
+                <div class="order-group">
+                    <div class="order-group-title" onclick="toggleGroup(this)">${tableKey}</div>
+                    ${orders.map(order => {
+                        const total = order.items.reduce((sum, item) => sum + (item.price * item.qty), 0);
+                        return `
+                            <div class="order-subgroup">
+                                <div class="order-subgroup-header" onclick="toggleSubgroup(this)">
+                                    <span>${tableKey} - ${order.dinersName}</span>
+                                    <span>¥${total}</span>
+                                </div>
+                                <div class="order-items">
+                                    ${order.items.map((item, idx) => `
+                                        <div class="order-item ${item.paid ? 'paid' : ''}" data-order-id="${order.id}" data-item-idx="${idx}">
+                                            <input type="checkbox" class="order-item-checkbox" onchange="toggleItemSelection('${order.id}', ${idx})" ${item.paid ? 'disabled checked' : ''}>
+                                            <span class="order-item-name">${item.name}</span>
+                                            <span class="order-item-price">¥${item.price}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `).join('');
+        }
+
+        // ========== EVENT HANDLERS ==========
+        function switchScreen(screenId, tabIndex) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            
+            document.getElementById(screenId).classList.add('active');
+            document.querySelectorAll('.tab')[tabIndex].classList.add('active');
+
+            if (screenId === 'ordersScreen') {
+                renderOrders();
+            }
+        }
+
+        function selectTable(tableId) {
+            state.currentTable = tableId;
+            const table = state.tables.find(t => t.id === tableId);
+            openDinersModal(table.diners);
+        }
+
+        function openDinersModal(diners) {
+            const tabsContainer = document.getElementById('dinerTabs');
+            tabsContainer.innerHTML = diners.map(d => `
+                <button class="modal-tab ${d === '0' ? 'active' : ''}" onclick="selectDinerTab(this, '${d}')">${d}</button>
+            `).join('');
+            document.getElementById('dinerNameInput').value = '';
+            document.getElementById('dinersModal').classList.add('active');
+            state.currentDiner = diners[0];
+        }
+
+        function selectDinerTab(btn, diner) {
+            document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            state.currentDiner = diner;
+        }
+
+        function confirmDiner() {
+            closeDinersModal();
+            state.shoppingCart = {};
+            renderCart();
+            renderDishes();
+            switchScreen('menuScreen', 0);
+            showAlert(`Table ${state.currentTable} - Diner ${state.currentDiner}`);
+        }
+
+        function closeDinersModal() {
+            document.getElementById('dinersModal').classList.remove('active');
+        }
+
+        function switchCategory(btn) {
+            document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderDishes(btn.textContent);
+        }
+
+        function addToCart(dishId, name, price) {
+            if (!state.shoppingCart[dishId]) {
+                state.shoppingCart[dishId] = { id: dishId, name, price, qty: 0 };
+            }
+            state.shoppingCart[dishId].qty++;
+            renderCart();
+        }
+
+        function removeFromCart(dishId) {
+            if (state.shoppingCart[dishId]) {
+                state.shoppingCart[dishId].qty--;
+                if (state.shoppingCart[dishId].qty <= 0) {
+                    delete state.shoppingCart[dishId];
+                }
+                renderCart();
+            }
+        }
+
+        function printOrder() {
+            const cartItems = Object.values(state.shoppingCart);
+            if (cartItems.length === 0) {
+                showAlert('Please add items to cart');
+                return;
+            }
+
+            // Add to orders
+            const total = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            state.orders.push({
+                id: 'ord' + Date.now(),
+                tableId: state.currentTable,
+                diner: state.currentDiner,
+                dinersName: 'Diner ' + state.currentDiner,
+                items: cartItems.map(item => ({ ...item, qty: item.qty, paid: false }))
+            });
+
+            showAlert('Order printed successfully!');
+            state.shoppingCart = {};
+            switchScreen('tableScreen', 0);
+        }
+
+        function toggleGroup(el) {
+            el.parentElement.classList.toggle('collapsed');
+        }
+
+        function toggleSubgroup(el) {
+            el.nextElementSibling.style.display = 
+                el.nextElementSibling.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function toggleItemSelection(orderId, itemIdx) {
+            const order = state.orders.find(o => o.id === orderId);
+            if (order) {
+                // Toggle checkbox without marking as paid yet
+                const checkbox = document.querySelector(`[data-order-id="${orderId}"][data-item-idx="${itemIdx}"] .order-item-checkbox`);
+                if (checkbox && !checkbox.disabled) {
+                    if (!state.selectedInvoiceItems.has(`${orderId}-${itemIdx}`)) {
+                        state.selectedInvoiceItems.add(`${orderId}-${itemIdx}`);
+                        checkbox.checked = true;
+                    } else {
+                        state.selectedInvoiceItems.delete(`${orderId}-${itemIdx}`);
+                        checkbox.checked = false;
+                    }
+                }
+            }
+        }
+
+        function generateInvoice() {
+            if (state.selectedInvoiceItems.size === 0) {
+                showAlert('Please select at least 1 dish');
+                return;
+            }
+
+            const items = [];
+            let total = 0;
+            state.selectedInvoiceItems.forEach(key => {
+                const [orderId, itemIdx] = key.split('-');
+                const order = state.orders.find(o => o.id === orderId);
+                if (order) {
+                    const item = order.items[itemIdx];
+                    items.push(item);
+                    total += item.price * item.qty;
+                }
+            });
+
+            const receiptItems = document.getElementById('receiptItems');
+            receiptItems.innerHTML = items.map(item => `
+                <div class="receipt-row">
+                    <span>${item.name} x${item.qty}</span>
+                    <span>¥${item.price * item.qty}</span>
+                </div>
+            `).join('');
+            document.getElementById('receiptTotal').textContent = '¥' + total;
+
+            showAlert('Invoice generated');
+        }
+
+        function markAsPaid() {
+            if (state.selectedInvoiceItems.size === 0) {
+                showAlert('Please select at least 1 dish');
+                return;
+            }
+
+            state.selectedInvoiceItems.forEach(key => {
+                const [orderId, itemIdx] = key.split('-');
+                const order = state.orders.find(o => o.id === orderId);
+                if (order) {
+                    order.items[itemIdx].paid = true;
+                }
+            });
+
+            state.selectedInvoiceItems.clear();
+            renderOrders();
+            showAlert('Payment marked');
+        }
+
+        function showAlert(message) {
+            const alert = document.getElementById('alert');
+            alert.textContent = message;
+            alert.classList.add('show');
+            setTimeout(() => alert.classList.remove('show'), 3000);
+        }
+
+        // ========== INIT ==========
+        function init() {
+            renderTables();
+            renderDishes();
+            renderOrders();
+        }
+
+        init();
+    </script>
+</body>
+</html>
