@@ -218,19 +218,6 @@ export default function MenuScreen() {
   // Left side: Menu
   const menuSection = (
     <View style={styles.leftPanel}>
-      {/* Header with Back Button */}
-      <View style={[styles.header, { borderBottomColor: THEME.colors.accent, paddingTop: insets.top + THEME.spacing.lg }]}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <Text style={[styles.backButtonText, { color: THEME.colors.accent }]}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: THEME.colors.textPrimary }]}>
-          🍽️ Menu
-        </Text>
-      </View>
-
       {/* Category Tabs */}
       <ScrollView
         horizontal
@@ -277,31 +264,38 @@ export default function MenuScreen() {
           paddingVertical: THEME.spacing.lg,
         }}
         renderItem={renderDishCard}
+        ListEmptyComponent={
+          !dishesWithQuantity.length ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={THEME.colors.accent} />
+              <Text style={[styles.loadingText, { color: THEME.colors.textSecondary, marginTop: THEME.spacing.md }]}>
+                {loadingDishes ? 'Loading dishes...' : 'No dishes available'}
+              </Text>
+            </View>
+          ) : null
+        }
       />
-
-      {loadingDishes && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={THEME.colors.accent} />
-        </View>
-      )}
     </View>
   );
 
   // Right side: Cart with diner tabs
   const cartSection = (
-    <View style={[styles.rightPanel, { borderLeftColor: THEME.colors.accent, backgroundColor: THEME.colors.cardBg }]}>
-      {/* Diner Tabs Header */}
-      <View style={[styles.dinerTabsContainer, { borderBottomColor: THEME.colors.borderColor, paddingTop: insets.top + THEME.spacing.md }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dinerTabsScroll}>
-          {dinerTabs.map(renderDinerTab)}
-          <TouchableOpacity
-            style={[styles.addDinerButton, { borderColor: THEME.colors.accent }]}
-            onPress={handleAddDinerTab}
-          >
-            <Text style={[styles.addDinerButtonText, { color: THEME.colors.accent }]}>+</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
+    <View style={[styles.rightPanel, { backgroundColor: THEME.colors.cardBg }]}>
+      {/* Diner Tabs */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={[styles.dinerTabsScroll, { borderBottomColor: THEME.colors.borderColor }]}
+        contentContainerStyle={styles.dinerTabsContainer}
+      >
+        {dinerTabs.map(renderDinerTab)}
+        <TouchableOpacity
+          style={[styles.addDinerButton, { borderColor: THEME.colors.accent }]}
+          onPress={handleAddDinerTab}
+        >
+          <Text style={[styles.addDinerButtonText, { color: THEME.colors.accent }]}>+</Text>
+        </TouchableOpacity>
+      </ScrollView>
 
       {/* Cart Items */}
       <ScrollView style={styles.cartItems}>
@@ -360,6 +354,19 @@ export default function MenuScreen() {
     // For portrait: stack menu + cart vertically
     return (
       <View style={[styles.container, { backgroundColor: THEME.colors.darkBg }]}>
+        {/* Main Header */}
+        <View style={[styles.mainHeader, { paddingTop: insets.top, borderBottomColor: THEME.colors.accent }]}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Text style={[styles.backButtonText, { color: THEME.colors.accent }]}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: THEME.colors.textPrimary }]}>
+            🍽️ Menu
+          </Text>
+        </View>
+        
         {menuSection}
         {cartSection}
       </View>
@@ -369,8 +376,24 @@ export default function MenuScreen() {
   // For landscape: side-by-side layout
   return (
     <View style={[styles.containerRow, { backgroundColor: THEME.colors.darkBg }]}>
-      {menuSection}
-      {cartSection}
+      {/* Main Header */}
+      <View style={[styles.mainHeader, { paddingTop: insets.top, borderBottomColor: THEME.colors.accent, width: '100%' }]}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
+          <Text style={[styles.backButtonText, { color: THEME.colors.accent }]}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: THEME.colors.textPrimary, flex: 1 }]}>
+          🍽️ Menu
+        </Text>
+      </View>
+
+      {/* Content Area */}
+      <View style={styles.contentRow}>
+        {menuSection}
+        {cartSection}
+      </View>
     </View>
   );
 }
@@ -381,26 +404,30 @@ const styles = StyleSheet.create({
   },
   containerRow: {
     flex: 1,
+    flexDirection: 'column',
+  },
+  mainHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: THEME.spacing.lg,
+    paddingVertical: THEME.spacing.lg,
+    paddingHorizontal: THEME.spacing.xl,
+    borderBottomWidth: 2,
+    backgroundColor: THEME.colors.darkBg,
+  },
+  contentRow: {
+    flex: 1,
     flexDirection: 'row',
   },
   leftPanel: {
-    flex: 1,
+    flex: 1.5,
     borderRightWidth: 2,
     borderRightColor: THEME.colors.accent,
   },
   rightPanel: {
-    width: '40%',
-    borderLeftWidth: 2,
+    flex: 1,
     display: 'flex',
     flexDirection: 'column',
-  },
-  header: {
-    paddingVertical: THEME.spacing.lg,
-    paddingHorizontal: THEME.spacing.xl,
-    borderBottomWidth: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: THEME.spacing.lg,
   },
   backButton: {
     paddingVertical: THEME.spacing.sm,
@@ -418,13 +445,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     maxHeight: 50,
   },
+  dinerTabsScroll: {
+    borderBottomWidth: 1,
+    maxHeight: 50,
+  },
   categoryTab: {
     paddingVertical: THEME.spacing.md,
     paddingHorizontal: THEME.spacing.lg,
     borderBottomWidth: 2,
   },
   categoryTabText: {
-    fontSize: THEME.typography.sizes.base,
+    fontSize: THEME.typography.sizes.sm,
     fontWeight: '600',
   },
   dishCardContainer: {
@@ -525,15 +556,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: THEME.spacing.xl * 2,
+  },
+  loadingText: {
+    fontSize: THEME.typography.sizes.sm,
+    fontWeight: '500',
+  },
   // Cart styles
   dinerTabsContainer: {
-    borderBottomWidth: 1,
     paddingHorizontal: THEME.spacing.md,
-    paddingVertical: THEME.spacing.sm,
-  },
-  dinerTabsScroll: {
-    marginHorizontal: -THEME.spacing.md,
-    paddingHorizontal: THEME.spacing.md,
+    paddingVertical: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dinerTab: {
     paddingVertical: THEME.spacing.md,
