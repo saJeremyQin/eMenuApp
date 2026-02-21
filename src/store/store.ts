@@ -1,9 +1,11 @@
 import { configureStore } from '@reduxjs/toolkit';
 import orderReducer from './orderSlice';
+import dishesReducer from './dishesSlice';
 
 export const store = configureStore({
   reducer: {
     order: orderReducer,
+    dishes: dishesReducer,
   },
 });
 

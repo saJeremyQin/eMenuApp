@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   FlatList,
   Dimensions,
   StyleSheet,
@@ -14,36 +13,16 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation } from '@react-navigation/native';
 import { RootState, AppDispatch } from '../store/store';
 import { addDraftItem, updateDraftItemQuantity, removeDraftItem } from '../store/orderSlice';
-import GraphQLService from '../services/GraphQLService';
-import { LIST_DISH_TYPES, LIST_DISHES } from '../graphql/queries';
+import {
+  selectDishTypes,
+  selectDishesByType,
+  selectActiveDishTypes,
+  fetchDishesAndTypes,
+  Dish,
+  DishType,
+} from '../store/dishesSlice';
 import { THEME } from '../config/theme';
 import DishCard from '../components/DishCard';
-
-interface DishType {
-  id: string;
-  name: string;
-  alias?: string;
-  sortOrder: number;
-  isActive: boolean;
-  isDeleted: boolean;
-}
-
-interface Dish {
-  id: string;
-  name: string;
-  price: number;
-  imageUrl?: string;
-  description?: string;
-  sortOrder: number;
-  isActive: boolean;
-  isDeleted: boolean;
-  dishType: {
-    id: string;
-    name: string;
-    alias?: string;
-    sortOrder: number;
-  };
-}
 
 interface DraftItemUI extends Dish {
   quantity: number;
@@ -61,11 +40,19 @@ export default function MenuScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const draftItems = useSelector((state: RootState) => state.order.draftItems);
-
-  const [dishTypes, setDishTypes] = useState<DishType[]>([]);
-  const [dishes, setDishes] = useState<Dish[]>([]);
+  
+  // 从 Redux 获取缓存的菜品和分类
+  const allDishTypes = useSelector(selectActiveDishTypes);
+  const dishesLoading = useSelector((state: RootState) => state.dishes.isLoading);
+  const dishesLoaded = useSelector((state: RootState) => state.dishes.isLoaded);
+  const dishesError = useSelector((state: RootState) => state.dishes.error);
+  const allDishes = useSelector((state: RootState) => state.dishes.dishes);
+  
   const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
-  const [loadingDishes, setLoadingDishes] = useState(false);
+  const selectedDishes = useSelector((state: RootState) =>
+    selectedTypeId ? selectDishesByType(selectedTypeId)(state) : []
+  );
+
   const [dimensions, setDimensions] = useState(Dimensions.get('window'));
   const [dinerTabs, setDinerTabs] = useState<DinerTab[]>([
     { tabId: 'default', label: '🍴', dinerId: 0 }, // Default shared tab
@@ -82,6 +69,19 @@ export default function MenuScreen() {
     return 2;
   };
 
+  // Debug logs
+  useEffect(() => {
+    console.log('MenuScreen Debug:', {
+      dishesLoaded,
+      dishesLoading,
+      dishesError,
+      allDishTypesCount: allDishTypes.length,
+      allDishesCount: allDishes.length,
+      selectedTypeId,
+      selectedDishesCount: selectedDishes.length,
+    });
+  }, [dishesLoaded, dishesLoading, dishesError, allDishTypes, allDishes, selectedTypeId, selectedDishes]);
+
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
       setDimensions(window);
@@ -89,55 +89,28 @@ export default function MenuScreen() {
     return () => subscription?.remove();
   }, []);
 
-  // Load dish types
+  // 手动加载菜品和分类（如果 Redux 中没有数据）
   useEffect(() => {
-    const loadDishTypes = async () => {
-      try {
-        const response = await GraphQLService.query(LIST_DISH_TYPES);
-        const types = (response as any).listDishTypes || [];
-        const activeTypes = types.filter((t: DishType) => t.isActive && !t.isDeleted);
-        setDishTypes(activeTypes);
-        if (activeTypes.length > 0) {
-          setSelectedTypeId(activeTypes[0].id);
-        }
-      } catch (error) {
-        console.error('Failed to load dish types:', error);
-      }
-    };
-
-    loadDishTypes();
+    if (!dishesLoaded && !dishesLoading && !allDishes.length) {
+      console.log('📡 MenuScreen: Loading dishes from GraphQL...');
+      dispatch(fetchDishesAndTypes());
+    }
   }, []);
 
-  // Load dishes when selected type changes
+  // 当菜品分类加载完后，自动选中第一个
   useEffect(() => {
-    if (selectedTypeId) {
-      loadDishes(selectedTypeId);
+    if (allDishTypes.length > 0 && !selectedTypeId) {
+      setSelectedTypeId(allDishTypes[0].id);
     }
-  }, [selectedTypeId]);
+  }, [allDishTypes, selectedTypeId]);
 
-  const loadDishes = async (dishTypeId: string) => {
-    setLoadingDishes(true);
-    try {
-      const response = await GraphQLService.query(LIST_DISHES, {
-        dishTypeId: dishTypeId || null,
-      });
-      const allDishes = (response as any).listDishes || [];
-      const activeDishes = allDishes.filter((d: Dish) => d.isActive && !d.isDeleted);
-      setDishes(activeDishes);
-    } catch (error) {
-      console.error('Failed to load dishes:', error);
-    } finally {
-      setLoadingDishes(false);
-    }
-  };
-
-  // Combine draft items with dishes
+  // 组合草稿项目与菜品数据及数量
   const dishesWithQuantity: DraftItemUI[] = useMemo(() => {
-    return dishes.map(dish => ({
+    return selectedDishes.map(dish => ({
       ...dish,
       quantity: draftItems.find(d => d.dishId === dish.id)?.quantity || 0,
     }));
-  }, [dishes, draftItems]);
+  }, [selectedDishes, draftItems]);
 
   const handleAddDish = (dish: Dish) => {
     dispatch(
@@ -218,37 +191,6 @@ export default function MenuScreen() {
   // Left side: Menu
   const menuSection = (
     <View style={styles.leftPanel}>
-      {/* Category Tabs */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={[styles.categoriesScroll, { borderBottomColor: THEME.colors.borderColor }]}
-      >
-        {dishTypes.map(type => (
-          <TouchableOpacity
-            key={type.id}
-            style={[
-              styles.categoryTab,
-              {
-                borderBottomColor: selectedTypeId === type.id ? THEME.colors.accent : 'transparent',
-              },
-            ]}
-            onPress={() => setSelectedTypeId(type.id)}
-          >
-            <Text
-              style={[
-                styles.categoryTabText,
-                {
-                  color: selectedTypeId === type.id ? THEME.colors.accent : THEME.colors.textSecondary,
-                },
-              ]}
-            >
-              {type.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
       {/* Dishes Grid */}
       <FlatList
         data={dishesWithQuantity}
@@ -264,17 +206,76 @@ export default function MenuScreen() {
           paddingVertical: THEME.spacing.lg,
         }}
         renderItem={renderDishCard}
+        ListHeaderComponent={
+          // Category Tabs - 放在 FlatList 顶部
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={[styles.categoriesScroll, { borderBottomColor: THEME.colors.borderColor }]}
+          >
+            {allDishTypes.map(type => (
+              <TouchableOpacity
+                key={type.id}
+                style={[
+                  styles.categoryTab,
+                  {
+                    borderBottomColor: selectedTypeId === type.id ? THEME.colors.accent : 'transparent',
+                  },
+                ]}
+                onPress={() => setSelectedTypeId(type.id)}
+              >
+                <Text
+                  style={[
+                    styles.categoryTabText,
+                    {
+                      color: selectedTypeId === type.id ? THEME.colors.accent : THEME.colors.textSecondary,
+                    },
+                  ]}
+                >
+                  {type.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        }
         ListEmptyComponent={
-          !dishesWithQuantity.length ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={THEME.colors.accent} />
-              <Text style={[styles.loadingText, { color: THEME.colors.textSecondary, marginTop: THEME.spacing.md }]}>
-                {loadingDishes ? 'Loading dishes...' : 'No dishes available'}
+          <View style={styles.loadingContainer}>
+            {dishesLoading && (
+              <>
+                <Text style={[styles.loadingText, { color: THEME.colors.textSecondary }]}>
+                  Loading dishes...
+                </Text>
+              </>
+            )}
+            {!dishesLoading && dishesError && (
+              <Text style={[styles.loadingText, { color: '#ff6b6b' }]}>
+                Error: {dishesError}
               </Text>
-            </View>
-          ) : null
+            )}
+            {!dishesLoading && !dishesError && (
+              <>
+                <Text style={[styles.loadingText, { color: THEME.colors.textSecondary, marginBottom: THEME.spacing.md }]}>
+                  No dishes available
+                </Text>
+              </>
+            )}
+          </View>
         }
       />
+    </View>
+  );
+
+  // Debug Panel - 固定在底部，始终显示
+  const debugPanel = (
+    <View style={{ backgroundColor: '#222', padding: 8, borderTopWidth: 1, borderTopColor: '#444', position: 'absolute', bottom: 0, left: 0, right: 0 }}>
+      <Text style={{ color: '#0f0', fontSize: 9, fontFamily: 'Courier New' }}>
+        Loaded={dishesLoaded ? 'Y' : 'N'} Loading={dishesLoading ? 'Y' : 'N'} Error={dishesError ? 'Y' : 'N'} | Types={allDishTypes.length} Dishes={allDishes.length} Selected={selectedDishes.length}
+      </Text>
+      {dishesError && (
+        <Text style={{ color: '#f00', fontSize: 8, fontFamily: 'Courier New' }}>
+          Error: {dishesError.substring(0, 60)}...
+        </Text>
+      )}
     </View>
   );
 
@@ -369,6 +370,7 @@ export default function MenuScreen() {
         
         {menuSection}
         {cartSection}
+        {debugPanel}
       </View>
     );
   }
@@ -394,6 +396,9 @@ export default function MenuScreen() {
         {menuSection}
         {cartSection}
       </View>
+      
+      {/* Debug Panel */}
+      {debugPanel}
     </View>
   );
 }

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   FlatList,
   Dimensions,
@@ -13,6 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 import { AppDispatch } from '../store/store';
 import { setSelectedTable } from '../store/orderSlice';
 import { THEME } from '../config/theme';
+import TableCard from '../components/TableCard';
 
 // Generate table numbers 1-24
 const PRESET_TABLES = Array.from({ length: 24 }, (_, i) => `${i + 1}`);
@@ -48,21 +48,13 @@ export default function TableSelectionScreen() {
 
   const renderTableCard = ({ item }: { item: TableItem }) => {
     return (
-      <TouchableOpacity
-        style={[
-          styles.tableCard,
-          {
-            borderColor: THEME.colors.borderColor,
-            backgroundColor: THEME.colors.cardBg,
-          },
-        ]}
-        onPress={() => handleSelectTable(item.number)}
-      >
-        <Text style={styles.tableIcon}>🍽️</Text>
-        <Text style={[styles.tableNumber, { color: THEME.colors.accent }]}>
-          Table {item.number}
-        </Text>
-      </TouchableOpacity>
+      <TableCard
+        tableNumber={item.number}
+        borderColor={THEME.colors.borderColor}
+        backgroundColor={THEME.colors.cardBg}
+        accentColor={THEME.colors.accent}
+        onPress={handleSelectTable}
+      />
     );
   };
 
@@ -109,23 +101,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: THEME.typography.sizes['2xl'],
-    fontWeight: '700',
-  },
-  tableCard: {
-    flex: 1,
-    borderRadius: THEME.borderRadius.md,
-    padding: THEME.spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    minHeight: 220,
-  },
-  tableIcon: {
-    fontSize: 48,
-    marginBottom: THEME.spacing.md,
-  },
-  tableNumber: {
-    fontSize: THEME.typography.sizes.xl,
     fontWeight: '700',
   },
   gridContainer: {
