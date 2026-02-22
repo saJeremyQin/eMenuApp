@@ -49,52 +49,63 @@ const initialState: DishesState = {
   lastFetchTime: null,
 };
 
-// Async thunk: 一次性加载菜品和分类
-export const fetchDishesAndTypes = createAsyncThunk(
-  'dishes/fetchDishesAndTypes',
+// Async thunk: 先加载菜品分类（快速）
+export const fetchDishTypes = createAsyncThunk(
+  'dishes/fetchDishTypes',
   async (_, { rejectWithValue }) => {
     try {
-      console.log('🔄 Starting fetchDishesAndTypes...');
-      // 并行请求分类和菜品
-      const [typesResponse, dishesResponse] = await Promise.all([
-        GraphQLService.query(LIST_DISH_TYPES),
-        GraphQLService.query(LIST_DISHES, { dishTypeId: null }),
-      ]);
-
-      console.log('📦 Raw responses:', { typesResponse, dishesResponse });
-
-      const allTypes = (typesResponse as any).listDishTypes || [];
-      const allDishes = (dishesResponse as any).listDishes || [];
-
-      console.log('📊 Data before filtering:', {
-        allTypesCount: allTypes.length,
-        allDishesCount: allDishes.length,
-        allTypes,
-        allDishes,
-      });
-
-      // 过滤出活跃的数据
-      // 注意：如果数据库中没有 isActive 字段或都是 false，则会返回空数组
-      // 暂时先不过滤，看看是否能逻辑问题
-      // const activeTypes = allTypes.filter((t: DishType) => t.isActive && !t.isDeleted);
-      // const activeDishes = allDishes.filter((d: Dish) => d.isActive && !d.isDeleted);
+      console.log('🔄 Starting fetchDishTypes...');
+      const typesResponse = await GraphQLService.query(LIST_DISH_TYPES);
       
-      // 只过滤已删除的，不过滤 isActive 状态
+      const allTypes = (typesResponse as any).listDishTypes || [];
       const activeTypes = allTypes.filter((t: DishType) => !t.isDeleted);
-      const activeDishes = allDishes.filter((d: Dish) => !d.isDeleted);
-
-      console.log('✨ Data after filtering:', {
-        activeTypesCount: activeTypes.length,
-        activeDishesCount: activeDishes.length,
-        activeTypes,
-        activeDishes,
+      
+      console.log('✨ Dish types loaded:', {
+        count: activeTypes.length,
+        types: activeTypes,
       });
 
-      return {
-        dishTypes: activeTypes,
-        dishes: activeDishes,
-        fetchTime: Date.now(),
-      };
+      return activeTypes;
+    } catch (error) {
+      console.error('❌ fetchDishTypes error:', error);
+      return rejectWithValue((error as Error).message || 'Failed to fetch dish types');
+    }
+  }
+);
+
+// Async thunk: 再加载菜品（可能较慢）
+export const fetchDishes = createAsyncThunk(
+  'dishes/fetchDishes',
+  async (_, { rejectWithValue }) => {
+    try {
+      console.log('🔄 Starting fetchDishes...');
+      const dishesResponse = await GraphQLService.query(LIST_DISHES, { dishTypeId: null });
+      
+      const allDishes = (dishesResponse as any).listDishes || [];
+      const activeDishes = allDishes.filter((d: Dish) => !d.isDeleted);
+      
+      console.log('✨ Dishes loaded:', {
+        count: activeDishes.length,
+      });
+
+      return activeDishes;
+    } catch (error) {
+      console.error('❌ fetchDishes error:', error);
+      return rejectWithValue((error as Error).message || 'Failed to fetch dishes');
+    }
+  }
+);
+
+// Async thunk: 一次性加载菜品和分类（保留向后兼容）
+export const fetchDishesAndTypes = createAsyncThunk(
+  'dishes/fetchDishesAndTypes',
+  async (_, { rejectWithValue, dispatch }) => {
+    try {
+      console.log('🔄 Starting fetchDishesAndTypes...');
+      // 先加载types，然后加载dishes
+      await dispatch(fetchDishTypes()).unwrap();
+      const dishes = await dispatch(fetchDishes()).unwrap();
+      return dishes;
     } catch (error) {
       console.error('❌ fetchDishesAndTypes error:', error);
       return rejectWithValue((error as Error).message || 'Failed to fetch dishes');
@@ -117,16 +128,42 @@ const dishesSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // Handle fetchDishTypes
+      .addCase(fetchDishTypes.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchDishTypes.fulfilled, (state, action) => {
+        state.dishTypes = action.payload;
+        state.error = null;
+      })
+      .addCase(fetchDishTypes.rejected, (state, action) => {
+        state.error = action.payload as string;
+      })
+      // Handle fetchDishes
+      .addCase(fetchDishes.pending, (state) => {
+        // Don't set isLoading to true here to keep UI responsive
+      })
+      .addCase(fetchDishes.fulfilled, (state, action) => {
+        state.dishes = action.payload;
+        state.isLoaded = true;
+        state.isLoading = false;
+        state.lastFetchTime = Date.now();
+        state.error = null;
+      })
+      .addCase(fetchDishes.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      })
+      // Handle fetchDishesAndTypes (for backward compatibility)
       .addCase(fetchDishesAndTypes.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(fetchDishesAndTypes.fulfilled, (state, action) => {
-        state.dishTypes = action.payload.dishTypes;
-        state.dishes = action.payload.dishes;
+      .addCase(fetchDishesAndTypes.fulfilled, (state) => {
+        // Types and dishes are already loaded by individual thunks
         state.isLoaded = true;
         state.isLoading = false;
-        state.lastFetchTime = action.payload.fetchTime;
         state.error = null;
       })
       .addCase(fetchDishesAndTypes.rejected, (state, action) => {

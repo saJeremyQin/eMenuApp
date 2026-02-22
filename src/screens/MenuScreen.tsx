@@ -14,6 +14,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation } from '@react-navigation/native';
 import { RootState, AppDispatch } from '../store/store';
 import { addDraftItem, updateDraftItemQuantity, removeDraftItem, addDinerTab, setDinerInfo, DinerTab } from '../store/orderSlice';
+import { useCancelOrderItem } from '../hooks/useOrder';
 import {
   selectDishTypes,
   selectDishesByType,
@@ -55,6 +56,8 @@ export default function MenuScreen() {
   );
 
   const [dimensions, setDimensions] = useState(Dimensions.get('window'));
+  const [editMode, setEditMode] = useState(false);
+  const { cancelItem } = useCancelOrderItem();
 
   const isLandscape = dimensions.width > dimensions.height;
 
@@ -162,25 +165,64 @@ export default function MenuScreen() {
     );
   };
 
+  // 处理取消已确认菜品
+  const handleCancelConfirmedItem = (item: any) => {
+    Alert.alert(
+      'Reduce Item',
+      `Cancel 1x ${item.name}?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Confirm',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Call backend to cancel item
+              if (!currentOrder?.id) {
+                Alert.alert('Error', 'Order ID not found');
+                return;
+              }
+              await cancelItem(currentOrder.id, item.itemId, 'Customer request');
+              console.log(`✅ Cancelled item: ${item.name}`);
+            } catch (error) {
+              console.error('❌ Failed to cancel item:', error);
+              Alert.alert('Error', 'Failed to cancel item');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const totalDraftItems = draftItems.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = draftItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-  // 提取已送厨和已取消的菜品
-  const confirmedItems = useMemo(() => {
+  // 提取已送厨的批次（保留批次结构）
+  const confirmedBatches = useMemo(() => {
     if (!currentOrder?.batches) {
       console.log('🔍 MenuScreen: No currentOrder.batches', currentOrder);
       return [];
     }
-    const confirmed = currentOrder.batches.flatMap(batch =>
+    // 只返回包含已确认菜品的批次
+    const batchesWithConfirmed = currentOrder.batches.filter(batch =>
+      batch.items.some(item => item.status === 'CONFIRMED')
+    );
+    console.log('🔍 MenuScreen: Confirmed batches', {
+      batchesCount: batchesWithConfirmed.length,
+      batches: batchesWithConfirmed,
+    });
+    return batchesWithConfirmed;
+  }, [currentOrder]);
+
+  // 跟踪所有已确认菜品总数（用于计算总金额）
+  const confirmedItems = useMemo(() => {
+    return confirmedBatches.flatMap(batch =>
       batch.items.filter(item => item.status === 'CONFIRMED')
     );
-    console.log('🔍 MenuScreen: Confirmed items', {
-      batchesCount: currentOrder.batches.length,
-      confirmedItemsCount: confirmed.length,
-      confirmedItems: confirmed,
-    });
-    return confirmed;
-  }, [currentOrder]);
+  }, [confirmedBatches]);
 
   const cancelledItems = useMemo(() => {
     if (!currentOrder?.batches) return [];
@@ -345,44 +387,93 @@ export default function MenuScreen() {
 
       {/* Cart Items */}
       <ScrollView style={styles.cartItems}>
-        {/* 已送厨 Section */}
+        {/* Sent to Kitchen Section - Grouped by Batch */}
         {confirmedItems.length > 0 && (
           <View style={{ marginBottom: THEME.spacing.lg }}>
             <View style={[styles.sectionHeader, { backgroundColor: '#e8e8e8' }]}>
               <Text style={[styles.sectionTitle, { color: '#333' }]}>
                 Sent to Kitchen ({confirmedItems.length})
               </Text>
-            </View>
-            {confirmedItems.map(item => (
-              <View
-                key={item.itemId}
+              <TouchableOpacity
                 style={[
-                  styles.cartItem,
-                  { 
-                    borderColor: THEME.colors.borderColor,
-                    backgroundColor: '#f5f5f5',
-                    opacity: 0.85,
-                  }
+                  styles.editButton,
+                  { backgroundColor: THEME.colors.accent }
                 ]}
+                onPress={() => setEditMode(!editMode)}
               >
-                <Text style={[styles.cartItemName, { color: '#333' }]}>
-                  {item.name}
+                <Text style={styles.editButtonText}>
+                  {editMode ? 'Done' : 'Edit'}
                 </Text>
-                <View style={styles.cartItemFooter}>
-                  <Text style={[styles.cartItemQty, { color: '#666' }]}>
-                    {item.quantity}x
+              </TouchableOpacity>
+            </View>
+            {confirmedBatches.map((batch, batchIndex) => {
+              const confirmedBatchItems = batch.items.filter(item => item.status === 'CONFIRMED');
+              
+              return (
+                <View key={batch.batchId} style={{ marginBottom: THEME.spacing.lg }}>
+                  {/* Batch Title - Plain text with time */}
+                  <Text style={[styles.batchTitle, { color: '#666', marginBottom: THEME.spacing.md }]}>
+                    Batch {batchIndex + 1} • Sent at {formatDateTime(batch.confirmedAt, true)}
                   </Text>
-                  <Text style={[styles.cartItemPrice, { color: THEME.colors.accent }]}>
-                    €{(item.price * item.quantity / 100).toFixed(2)}
-                  </Text>
+                  
+                  {/* Batch Container - All items together */}
+                  <View
+                    style={[
+                      styles.batchContainer,
+                      {
+                        borderColor: THEME.colors.borderColor,
+                        backgroundColor: '#f5f5f5',
+                        opacity: 0.85,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        overflow: 'hidden',
+                      }
+                    ]}
+                  >
+                    {confirmedBatchItems.map((item, itemIndex) => (
+                      <View key={item.itemId}>
+                        <View style={[styles.batchItem, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.cartItemName, { color: '#333' }]}>
+                              {item.name}
+                            </Text>
+                            <View style={styles.cartItemFooter}>
+                              <Text style={[styles.cartItemQty, { color: '#666' }]}>
+                                {item.quantity}x
+                              </Text>
+                              <Text style={[styles.cartItemPrice, { color: THEME.colors.accent }]}>
+                                €{(item.price * item.quantity / 100).toFixed(2)}
+                              </Text>
+                            </View>
+                          </View>
+                          {editMode && (
+                            <TouchableOpacity
+                              style={styles.cancelButton}
+                              onPress={() => handleCancelConfirmedItem(item)}
+                            >
+                              <Text style={styles.cancelButtonText}>−</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                        {/* Separator between items (not after last item) */}
+                        {itemIndex < confirmedBatchItems.length - 1 && (
+                          <View style={[styles.itemSeparator, { backgroundColor: '#e0e0e0' }]} />
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                  
+                  {/* Batch Divider (except last batch) */}
+                  {batchIndex < confirmedBatches.length - 1 && (
+                    <View style={[styles.batchDivider, { 
+                      height: 1, 
+                      backgroundColor: '#d0d0d0', 
+                      marginVertical: THEME.spacing.md 
+                    }]} />
+                  )}
                 </View>
-                {item.confirmedAt && (
-                  <Text style={[styles.sectionFooter, { color: '#999' }]}>
-                    Confirmed at {formatDateTime(item.confirmedAt)}
-                  </Text>
-                )}
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
 
@@ -799,6 +890,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: THEME.colors.borderColor,
     marginBottom: THEME.spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   sectionTitle: {
     fontSize: THEME.typography.sizes.base,
@@ -807,6 +901,47 @@ const styles = StyleSheet.create({
   sectionFooter: {
     fontSize: THEME.typography.sizes.xs,
     marginTop: THEME.spacing.sm,
+  },
+  // Batch styles
+  batchHeader: {
+    paddingHorizontal: THEME.spacing.md,
+    paddingVertical: THEME.spacing.sm,
+    marginBottom: THEME.spacing.sm,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  batchHeaderText: {
+    fontSize: THEME.typography.sizes.sm,
+    fontWeight: '600',
+  },
+  batchTimeText: {
+    fontSize: THEME.typography.sizes.xs,
+  },
+  batchTitle: {
+    fontSize: THEME.typography.sizes.sm,
+    fontWeight: '600',
+  },
+  batchContainer: {
+    // Container for all items in a batch
+    borderRadius: 8,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  batchItem: {
+    paddingHorizontal: THEME.spacing.md,
+    paddingVertical: THEME.spacing.md,
+  },
+  itemSeparator: {
+    height: 1,
+    marginHorizontal: THEME.spacing.md,
+    backgroundColor: '#e0e0e0',
+  },
+  batchDivider: {
+    height: 1,
+    backgroundColor: '#d0d0d0',
+    marginVertical: THEME.spacing.md,
+    marginHorizontal: THEME.spacing.md,
   },
   cartSummary: {
     borderTopWidth: 2,
@@ -840,4 +975,32 @@ const styles = StyleSheet.create({
     fontSize: THEME.typography.sizes.base,
     fontWeight: '700',
   },
+  editButton: {
+    paddingVertical: THEME.spacing.sm,
+    paddingHorizontal: THEME.spacing.md,
+    borderRadius: THEME.borderRadius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editButtonText: {
+    fontSize: THEME.typography.sizes.base,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  cancelButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#ff6b6b',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: THEME.spacing.md,
+  },
+  cancelButtonText: {
+    fontSize: 24,
+    color: '#fff',
+    fontWeight: '700',
+    lineHeight: 24,
+  },
 });
+
