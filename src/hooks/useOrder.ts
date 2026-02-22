@@ -29,7 +29,12 @@ export function useConfirmOrderItems() {
 
       try {
         const response = await GraphQLService.mutation(CONFIRM_ORDER_ITEMS, { input });
+        console.log('🔧 useConfirmOrderItems - Raw response:', response);
+        console.log('🔧 useConfirmOrderItems - Response keys:', Object.keys(response || {}));
+        
         const order = (response as any).confirmOrderItems;
+        console.log('🔧 useConfirmOrderItems - Extracted order:', order);
+        
         dispatch(setCurrentOrder(order));
         dispatch(setError(null));
         return order;

@@ -19,28 +19,28 @@ export default function OrderNavigator() {
         name="TableSelection"
         component={TableSelectionScreen}
         options={{
-          title: '选择桌号',
+          title: 'Select Table',
         }}
       />
       <Stack.Screen
         name="Menu"
         component={MenuScreen}
         options={{
-          title: '菜单',
+          title: 'Menu',
         }}
       />
       <Stack.Screen
         name="OrderReview"
         component={OrderReviewScreen}
         options={{
-          title: '订单确认',
+          title: 'Order Review',
         }}
       />
       <Stack.Screen
         name="OrderDetails"
         component={OrderDetailsScreen}
         options={{
-          title: '订单详情',
+          title: 'Order Details',
         }}
       />
     </Stack.Navigator>

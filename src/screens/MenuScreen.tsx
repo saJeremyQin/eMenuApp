@@ -7,12 +7,13 @@ import {
   FlatList,
   Dimensions,
   StyleSheet,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation } from '@react-navigation/native';
 import { RootState, AppDispatch } from '../store/store';
-import { addDraftItem, updateDraftItemQuantity, removeDraftItem } from '../store/orderSlice';
+import { addDraftItem, updateDraftItemQuantity, removeDraftItem, addDinerTab, setDinerInfo, DinerTab } from '../store/orderSlice';
 import {
   selectDishTypes,
   selectDishesByType,
@@ -22,17 +23,11 @@ import {
   DishType,
 } from '../store/dishesSlice';
 import { THEME } from '../config/theme';
+import { formatDateTime } from '../lib/dateUtils';
 import DishCard from '../components/DishCard';
 
 interface DraftItemUI extends Dish {
   quantity: number;
-}
-
-// Diner tab type
-interface DinerTab {
-  tabId: string;
-  label: string;
-  dinerId: number;
 }
 
 export default function MenuScreen() {
@@ -40,6 +35,12 @@ export default function MenuScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const draftItems = useSelector((state: RootState) => state.order.draftItems);
+  
+  // 从 Redux 获取分餐信息
+  const dinerTabs = useSelector((state: RootState) => state.order.dinerTabs);
+  const selectedDinerId = useSelector((state: RootState) => state.order.selectedDinerId);
+  const selectedTabId = useSelector((state: RootState) => state.order.selectedTabId);
+  const currentOrder = useSelector((state: RootState) => state.order.currentOrder);
   
   // 从 Redux 获取缓存的菜品和分类
   const allDishTypes = useSelector(selectActiveDishTypes);
@@ -54,10 +55,6 @@ export default function MenuScreen() {
   );
 
   const [dimensions, setDimensions] = useState(Dimensions.get('window'));
-  const [dinerTabs, setDinerTabs] = useState<DinerTab[]>([
-    { tabId: 'default', label: '🍴', dinerId: 0 }, // Default shared tab
-  ]);
-  const [activeDinerTab, setActiveDinerTab] = useState<string>('default');
 
   const isLandscape = dimensions.width > dimensions.height;
 
@@ -97,6 +94,16 @@ export default function MenuScreen() {
     }
   }, []);
 
+  // 监控 currentOrder 变化（用于调试）
+  useEffect(() => {
+    console.log('📊 MenuScreen: currentOrder updated', {
+      hasOrder: !!currentOrder,
+      orderId: currentOrder?.id,
+      batchesCount: currentOrder?.batches?.length || 0,
+      totalConfirmedAmount: currentOrder?.totalConfirmedAmount,
+    });
+  }, [currentOrder]);
+
   // 当菜品分类加载完后，自动选中第一个
   useEffect(() => {
     if (allDishTypes.length > 0 && !selectedTypeId) {
@@ -132,18 +139,58 @@ export default function MenuScreen() {
   };
 
   const handleAddDinerTab = () => {
-    const nextDinerId = dinerTabs.length;
-    const newTab: DinerTab = {
-      tabId: `diner-${nextDinerId}`,
-      label: `👤${nextDinerId}`,
-      dinerId: nextDinerId,
-    };
-    setDinerTabs([...dinerTabs, newTab]);
-    setActiveDinerTab(newTab.tabId);
+    Alert.prompt(
+      'Add Diner',
+      'Enter diner name (e.g., Bob, Alice):',
+      [
+        {
+          text: 'Cancel',
+          onPress: () => console.log('Cancelled'),
+          style: 'cancel',
+        },
+        {
+          text: 'Add',
+          onPress: (name) => {
+            if (name && name.trim()) {
+              dispatch(addDinerTab({ name: name.trim() }));
+            }
+          },
+        },
+      ],
+      'plain-text',
+      ''
+    );
   };
 
   const totalDraftItems = draftItems.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = draftItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  // 提取已送厨和已取消的菜品
+  const confirmedItems = useMemo(() => {
+    if (!currentOrder?.batches) {
+      console.log('🔍 MenuScreen: No currentOrder.batches', currentOrder);
+      return [];
+    }
+    const confirmed = currentOrder.batches.flatMap(batch =>
+      batch.items.filter(item => item.status === 'CONFIRMED')
+    );
+    console.log('🔍 MenuScreen: Confirmed items', {
+      batchesCount: currentOrder.batches.length,
+      confirmedItemsCount: confirmed.length,
+      confirmedItems: confirmed,
+    });
+    return confirmed;
+  }, [currentOrder]);
+
+  const cancelledItems = useMemo(() => {
+    if (!currentOrder?.batches) return [];
+    return currentOrder.batches.flatMap(batch =>
+      batch.items.filter(item => item.status === 'CANCELLED')
+    );
+  }, [currentOrder]);
+
+  const totalConfirmedAmount = confirmedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const totalCancelledAmount = cancelledItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
   const gridColumns = getMenuColumns();
   const menuWidth = isLandscape ? dimensions.width * 0.6 : dimensions.width;
@@ -161,31 +208,6 @@ export default function MenuScreen() {
       onUpdateQuantity={(qty) => handleUpdateQuantity(item.id, qty)}
       itemWidth={itemWidth}
     />
-  );
-
-  const renderDinerTab = (tab: DinerTab) => (
-    <TouchableOpacity
-      key={tab.tabId}
-      style={[
-        styles.dinerTab,
-        {
-          borderBottomColor: activeDinerTab === tab.tabId ? THEME.colors.accent : 'transparent',
-          borderBottomWidth: activeDinerTab === tab.tabId ? 3 : 0,
-        },
-      ]}
-      onPress={() => setActiveDinerTab(tab.tabId)}
-    >
-      <Text
-        style={[
-          styles.dinerTabText,
-          {
-            color: activeDinerTab === tab.tabId ? THEME.colors.accent : THEME.colors.textSecondary,
-          },
-        ]}
-      >
-        {tab.label}
-      </Text>
-    </TouchableOpacity>
   );
 
   // Left side: Menu
@@ -289,7 +311,30 @@ export default function MenuScreen() {
         style={[styles.dinerTabsScroll, { borderBottomColor: THEME.colors.borderColor }]}
         contentContainerStyle={styles.dinerTabsContainer}
       >
-        {dinerTabs.map(renderDinerTab)}
+        {dinerTabs.map((tab) => (
+          <TouchableOpacity
+            key={tab.tabId}
+            style={[
+              styles.dinerTab,
+              {
+                borderBottomColor: selectedTabId === tab.tabId ? THEME.colors.accent : 'transparent',
+                borderBottomWidth: selectedTabId === tab.tabId ? 3 : 0,
+              },
+            ]}
+            onPress={() => dispatch(setDinerInfo({ dinerId: tab.dinerId, tabId: tab.tabId }))}
+          >
+            <Text
+              style={[
+                styles.dinerTabText,
+                {
+                  color: selectedTabId === tab.tabId ? THEME.colors.accent : THEME.colors.textSecondary,
+                },
+              ]}
+            >
+              {tab.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
         <TouchableOpacity
           style={[styles.addDinerButton, { borderColor: THEME.colors.accent }]}
           onPress={handleAddDinerTab}
@@ -300,51 +345,160 @@ export default function MenuScreen() {
 
       {/* Cart Items */}
       <ScrollView style={styles.cartItems}>
-        {totalDraftItems === 0 ? (
+        {/* 已送厨 Section */}
+        {confirmedItems.length > 0 && (
+          <View style={{ marginBottom: THEME.spacing.lg }}>
+            <View style={[styles.sectionHeader, { backgroundColor: '#e8e8e8' }]}>
+              <Text style={[styles.sectionTitle, { color: '#333' }]}>
+                Sent to Kitchen ({confirmedItems.length})
+              </Text>
+            </View>
+            {confirmedItems.map(item => (
+              <View
+                key={item.itemId}
+                style={[
+                  styles.cartItem,
+                  { 
+                    borderColor: THEME.colors.borderColor,
+                    backgroundColor: '#f5f5f5',
+                    opacity: 0.85,
+                  }
+                ]}
+              >
+                <Text style={[styles.cartItemName, { color: '#333' }]}>
+                  {item.name}
+                </Text>
+                <View style={styles.cartItemFooter}>
+                  <Text style={[styles.cartItemQty, { color: '#666' }]}>
+                    {item.quantity}x
+                  </Text>
+                  <Text style={[styles.cartItemPrice, { color: THEME.colors.accent }]}>
+                    €{(item.price * item.quantity / 100).toFixed(2)}
+                  </Text>
+                </View>
+                {item.confirmedAt && (
+                  <Text style={[styles.sectionFooter, { color: '#999' }]}>
+                    Confirmed at {formatDateTime(item.confirmedAt)}
+                  </Text>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* 新增菜品 Section */}
+        {draftItems.length > 0 && (
+          <View style={{ marginBottom: THEME.spacing.lg }}>
+            <View style={[styles.sectionHeader, { backgroundColor: THEME.colors.cardBg }]}>
+              <Text style={[styles.sectionTitle, { color: THEME.colors.textPrimary }]}>
+                New Items ({draftItems.length})
+              </Text>
+            </View>
+            {draftItems.map(item => (
+              <View
+                key={item.dishId}
+                style={[styles.cartItem, { borderColor: THEME.colors.borderColor }]}
+              >
+                <Text style={[styles.cartItemName, { color: THEME.colors.textPrimary }]}>
+                  {item.name}
+                </Text>
+                <View style={styles.cartItemFooter}>
+                  <Text style={[styles.cartItemQty, { color: THEME.colors.textSecondary }]}>
+                    {item.quantity}x
+                  </Text>
+                  <Text style={[styles.cartItemPrice, { color: THEME.colors.accent }]}>
+                    €{(item.price * item.quantity / 100).toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* 已取消 Section */}
+        {cancelledItems.length > 0 && (
+          <View style={{ marginBottom: THEME.spacing.lg }}>
+            <View style={[styles.sectionHeader, { backgroundColor: '#f0f0f0' }]}>
+              <Text style={[styles.sectionTitle, { color: '#999', textDecorationLine: 'line-through' }]}>
+                Cancelled ({cancelledItems.length})
+              </Text>
+            </View>
+            {cancelledItems.map(item => (
+              <View
+                key={item.itemId}
+                style={[
+                  styles.cartItem,
+                  {
+                    borderColor: THEME.colors.borderColor,
+                    opacity: 0.5,
+                  }
+                ]}
+              >
+                <Text style={[styles.cartItemName, { color: '#999', textDecorationLine: 'line-through' }]}>
+                  {item.name}
+                </Text>
+                <View style={styles.cartItemFooter}>
+                  <Text style={[styles.cartItemQty, { color: '#999', textDecorationLine: 'line-through' }]}>
+                    {item.quantity}x
+                  </Text>
+                  <Text style={[styles.cartItemPrice, { color: '#999', textDecorationLine: 'line-through' }]}>
+                    €{(item.price * item.quantity / 100).toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* 空状态 */}
+        {confirmedItems.length === 0 && draftItems.length === 0 && cancelledItems.length === 0 && (
           <View style={styles.emptyCart}>
             <Text style={[styles.emptyCartText, { color: THEME.colors.textSecondary }]}>
               No items added
             </Text>
           </View>
-        ) : (
-          draftItems.map(item => (
-            <View
-              key={item.dishId}
-              style={[styles.cartItem, { borderColor: THEME.colors.borderColor }]}
-            >
-              <Text style={[styles.cartItemName, { color: THEME.colors.textPrimary }]}>
-                {item.name}
-              </Text>
-              <View style={styles.cartItemFooter}>
-                <Text style={[styles.cartItemQty, { color: THEME.colors.textSecondary }]}>
-                  {item.quantity}x
-                </Text>
-                <Text style={[styles.cartItemPrice, { color: THEME.colors.accent }]}>
-                  €{(item.price * item.quantity / 100).toFixed(2)}
-                </Text>
-              </View>
-            </View>
-          ))
         )}
       </ScrollView>
 
       {/* Summary */}
-      {totalDraftItems > 0 && (
+      {(totalDraftItems > 0 || confirmedItems.length > 0) && (
         <View style={[styles.cartSummary, { borderTopColor: THEME.colors.accent, backgroundColor: THEME.colors.darkBg }]}>
-          <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, { color: THEME.colors.textSecondary }]}>
+          {confirmedItems.length > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: THEME.colors.textSecondary }]}>
+                Confirmed:
+              </Text>
+              <Text style={[styles.summaryValue, { color: THEME.colors.accent }]}>
+                €{(totalConfirmedAmount / 100).toFixed(2)}
+              </Text>
+            </View>
+          )}
+          {totalDraftItems > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: THEME.colors.textSecondary }]}>
+                New Items:
+              </Text>
+              <Text style={[styles.summaryValue, { color: THEME.colors.accent }]}>
+                €{(totalPrice / 100).toFixed(2)}
+              </Text>
+            </View>
+          )}
+          <View style={[styles.summaryRow, { borderTopWidth: 1, borderTopColor: THEME.colors.borderColor, paddingVertical: THEME.spacing.md, marginTop: THEME.spacing.md }]}>
+            <Text style={[styles.summaryLabel, { color: THEME.colors.textPrimary, fontWeight: '700' }]}>
               Total:
             </Text>
             <Text style={[styles.summaryTotal, { color: THEME.colors.accent }]}>
-              €{(totalPrice / 100).toFixed(2)}
+              €{((totalConfirmedAmount + totalPrice) / 100).toFixed(2)}
             </Text>
           </View>
-          <TouchableOpacity
-            style={[styles.reviewButton, { backgroundColor: THEME.colors.accent }]}
-            onPress={() => navigation.navigate('OrderReview')}
-          >
-            <Text style={styles.reviewButtonText}>Review Order</Text>
-          </TouchableOpacity>
+          {totalDraftItems > 0 && (
+            <TouchableOpacity
+              style={[styles.reviewButton, { backgroundColor: THEME.colors.accent, marginTop: THEME.spacing.md }]}
+              onPress={() => navigation.navigate('OrderReview')}
+            >
+              <Text style={styles.reviewButtonText}>Review Order</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>
@@ -638,6 +792,22 @@ const styles = StyleSheet.create({
     fontSize: THEME.typography.sizes.sm,
     fontWeight: '600',
   },
+  // Section styles
+  sectionHeader: {
+    paddingHorizontal: THEME.spacing.md,
+    paddingVertical: THEME.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.colors.borderColor,
+    marginBottom: THEME.spacing.md,
+  },
+  sectionTitle: {
+    fontSize: THEME.typography.sizes.base,
+    fontWeight: '600',
+  },
+  sectionFooter: {
+    fontSize: THEME.typography.sizes.xs,
+    marginTop: THEME.spacing.sm,
+  },
   cartSummary: {
     borderTopWidth: 2,
     paddingHorizontal: THEME.spacing.md,
@@ -655,6 +825,10 @@ const styles = StyleSheet.create({
   summaryTotal: {
     fontSize: THEME.typography.sizes.lg,
     fontWeight: '700',
+  },
+  summaryValue: {
+    fontSize: THEME.typography.sizes.base,
+    fontWeight: '600',
   },
   reviewButton: {
     paddingVertical: THEME.spacing.lg,

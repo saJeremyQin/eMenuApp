@@ -17,6 +17,7 @@ import {
   removeDraftItem,
   clearDraftItems,
 } from '../store/orderSlice';
+import { useConfirmOrderItems } from '../hooks/useOrder';
 import { THEME } from '../config/theme';
 
 export default function OrderReviewScreen() {
@@ -24,7 +25,11 @@ export default function OrderReviewScreen() {
   const navigation = useNavigation<any>();
   const draftItems = useSelector((state: RootState) => state.order.draftItems);
   const selectedTableNumber = useSelector((state: RootState) => state.order.selectedTableNumber);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const selectedDinerId = useSelector((state: RootState) => state.order.selectedDinerId);
+  const selectedTabId = useSelector((state: RootState) => state.order.selectedTabId);
+  
+  const { confirmOrder, isSubmitting } = useConfirmOrderItems();
+  const [isLoading, setIsLoading] = useState(false);
 
   if (!selectedTableNumber || draftItems.length === 0) {
     return (
@@ -65,14 +70,59 @@ export default function OrderReviewScreen() {
   };
 
   const handleSubmitOrder = async () => {
-    setIsSubmitting(true);
+    if (!selectedTableNumber) {
+      Alert.alert('Error', 'No table selected');
+      return;
+    }
+
+    if (draftItems.length === 0) {
+      Alert.alert('Error', 'No items to order');
+      return;
+    }
+
+    setIsLoading(true);
     try {
-      // TODO: Implement actual order submission via GraphQL
-      Alert.alert('Success', 'Order submitted to kitchen');
-      dispatch(clearDraftItems());
-      navigation.navigate('TableSelection');
+      // 准备要发送的菜品数据
+      const items = draftItems.map(item => ({
+        dishId: item.dishId,
+        quantity: item.quantity,
+        notes: item.notes || undefined,
+      }));
+
+      console.log('📤 OrderReviewScreen: Sending order to kitchen', {
+        tableNumber: selectedTableNumber,
+        dinerId: selectedDinerId,
+        tabId: selectedTabId,
+        items,
+      });
+
+      // 调用送厨 API
+      const orderResult = await confirmOrder({
+        tableNumber: selectedTableNumber,
+        dinerId: selectedDinerId,
+        tabId: selectedTabId,
+        items,
+        isFromCustomerScan: false,
+      });
+
+      console.log('📦 OrderReviewScreen: Order sent successfully', orderResult);
+
+      // 送厨成功
+      Alert.alert('Success', 'Order sent to kitchen', [
+        {
+          text: 'OK',
+          onPress: () => {
+            console.log('✅ OrderReviewScreen: Clearing draft items and navigating back');
+            dispatch(clearDraftItems());
+            navigation.navigate('Menu');
+          },
+        },
+      ]);
+    } catch (error) {
+      console.error('Order submission failed:', error);
+      Alert.alert('Error', (error as any).message || 'Failed to submit order');
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
 
@@ -165,12 +215,12 @@ export default function OrderReviewScreen() {
         <TouchableOpacity
           style={[styles.submitButton, { backgroundColor: THEME.colors.accent }]}
           onPress={handleSubmitOrder}
-          disabled={isSubmitting}
+          disabled={isSubmitting || isLoading}
         >
-          {isSubmitting ? (
+          {isSubmitting || isLoading ? (
             <ActivityIndicator color={THEME.colors.textPrimary} />
           ) : (
-            <Text style={styles.submitButtonText}>Confirm Order →</Text>
+            <Text style={styles.submitButtonText}>Send to Kitchen →</Text>
           )}
         </TouchableOpacity>
 

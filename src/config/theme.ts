@@ -9,7 +9,7 @@ export const THEME = {
     
     // Text
     textPrimary: '#ffffff',
-    textSecondary: '#7a8fa3',
+    textSecondary: '#a8c5e0',
     textMuted: '#999999',
     mutedText: '#7a8fa3',
     white: '#ffffff',

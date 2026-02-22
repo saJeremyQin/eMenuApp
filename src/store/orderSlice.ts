@@ -45,9 +45,16 @@ export interface DraftItem {
   notes?: string;
 }
 
+export interface DinerTab {
+  dinerId: string;
+  tabId: string;
+  name: string; // '🍴' for default, or user-provided name like 'Bob', 'Alice'
+}
+
 interface OrderState {
   currentOrder: Order | null;
   draftItems: DraftItem[];
+  dinerTabs: DinerTab[];
   isLoading: boolean;
   error: string | null;
   selectedTableNumber: string | null;
@@ -58,6 +65,9 @@ interface OrderState {
 const initialState: OrderState = {
   currentOrder: null,
   draftItems: [],
+  dinerTabs: [
+    { dinerId: '0', tabId: 'tab-0', name: '🍴' } // Default: no split meal
+  ],
   isLoading: false,
   error: null,
   selectedTableNumber: null,
@@ -148,6 +158,49 @@ const orderSlice = createSlice({
       state.selectedTabId = action.payload.tabId;
     },
 
+    // 添加新的分餐（diner）
+    addDinerTab: (
+      state,
+      action: PayloadAction<{ name: string }>
+    ) => {
+      const nextDinerId = state.dinerTabs.length.toString();
+      const newTab: DinerTab = {
+        dinerId: nextDinerId,
+        tabId: `tab-${nextDinerId}`,
+        name: action.payload.name,
+      };
+      state.dinerTabs.push(newTab);
+      // 自动切换到新的 diner
+      state.selectedDinerId = nextDinerId;
+      state.selectedTabId = newTab.tabId;
+    },
+
+    // 移除分餐（不能移除 diner-0）
+    removeDinerTab: (
+      state,
+      action: PayloadAction<string> // dinerId
+    ) => {
+      if (action.payload === '0') {
+        console.warn('Cannot remove default diner (diner-0)');
+        return;
+      }
+      state.dinerTabs = state.dinerTabs.filter(tab => tab.dinerId !== action.payload);
+      // 如果删除的是当前选中的 diner，切换回 diner-0
+      if (state.selectedDinerId === action.payload) {
+        state.selectedDinerId = '0';
+        state.selectedTabId = 'tab-0';
+      }
+    },
+
+    // 重置分餐（返回到只有 diner-0）
+    resetDinerTabs: (state) => {
+      state.dinerTabs = [
+        { dinerId: '0', tabId: 'tab-0', name: '🍴' }
+      ];
+      state.selectedDinerId = '0';
+      state.selectedTabId = 'tab-0';
+    },
+
     // 设置加载状态
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload;
@@ -231,6 +284,9 @@ export const {
   clearDraftItems,
   setSelectedTable,
   setDinerInfo,
+  addDinerTab,
+  removeDinerTab,
+  resetDinerTabs,
   setLoading,
   setError,
   updateOrderTotal,
