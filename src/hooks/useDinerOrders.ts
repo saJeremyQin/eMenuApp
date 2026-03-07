@@ -18,7 +18,7 @@ export function useDinerOrders() {
   // 维护表的所有订单的本地缓存
   const [tableOrders, setTableOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const lastTableNumberRef = useRef<string | undefined>();
+  const lastTableNumberRef = useRef<string | undefined>(undefined);
 
   // 初始化日志（只运行一次）
   useEffect(() => {

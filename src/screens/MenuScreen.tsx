@@ -447,13 +447,15 @@ export default function MenuScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Cart Items */}
-      <ScrollView style={styles.cartItems}>
+      {/* Content Container - Flex layout for scrollable items + fixed buttons */}
+      <View style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {/* Cart Items */}
+        <ScrollView style={[styles.cartItems, { flex: 1 }]}>
         {/* Sent to Kitchen Section - Grouped by Batch */}
         {confirmedItems.length > 0 && (
           <View style={{ marginBottom: THEME.spacing.lg }}>
-            <View style={[styles.sectionHeader, { backgroundColor: '#e8e8e8' }]}>
-              <Text style={[styles.sectionTitle, { color: '#333' }]}>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: THEME.colors.textPrimary }]}>
                 Sent to Kitchen ({confirmedItems.length})
               </Text>
               <TouchableOpacity
@@ -542,7 +544,7 @@ export default function MenuScreen() {
         {/* 新增菜品 Section */}
         {draftItems.length > 0 && (
           <View style={{ marginBottom: THEME.spacing.lg }}>
-            <View style={[styles.sectionHeader, { backgroundColor: THEME.colors.cardBg }]}>
+            <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: THEME.colors.textPrimary }]}>
                 New Items ({draftItems.length})
               </Text>
@@ -571,8 +573,8 @@ export default function MenuScreen() {
         {/* 已取消 Section */}
         {cancelledItems.length > 0 && (
           <View style={{ marginBottom: THEME.spacing.lg }}>
-            <View style={[styles.sectionHeader, { backgroundColor: '#f0f0f0' }]}>
-              <Text style={[styles.sectionTitle, { color: '#999', textDecorationLine: 'line-through' }]}>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: THEME.colors.textSecondary, textDecorationLine: 'line-through' }]}>
                 Cancelled ({cancelledItems.length})
               </Text>
             </View>
@@ -654,6 +656,24 @@ export default function MenuScreen() {
           )}
         </View>
       )}
+
+      {/* Pay Order Button - Fixed at bottom */}
+      <TouchableOpacity
+        style={[
+          styles.payOrderButton,
+          {
+            backgroundColor: THEME.colors.accent,
+            marginTop: THEME.spacing.md,
+          },
+        ]}
+        onPress={() => {
+          // TODO: Implement pay order logic
+          Alert.alert('Pay Order', 'Payment functionality coming soon');
+        }}
+      >
+        <Text style={styles.payOrderButtonText}>💳 Pay Order</Text>
+      </TouchableOpacity>
+    </View>
     </View>
   );
 
@@ -961,8 +981,6 @@ const styles = StyleSheet.create({
   sectionHeader: {
     paddingHorizontal: THEME.spacing.md,
     paddingVertical: THEME.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.colors.borderColor,
     marginBottom: THEME.spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1060,6 +1078,20 @@ const styles = StyleSheet.create({
     fontSize: THEME.typography.sizes.base,
     fontWeight: '700',
     color: '#fff',
+  },
+  payOrderButton: {
+    paddingVertical: THEME.spacing.lg,
+    paddingHorizontal: THEME.spacing.md,
+    marginHorizontal: THEME.spacing.md,
+    marginBottom: THEME.spacing.md,
+    borderRadius: THEME.borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  payOrderButtonText: {
+    color: THEME.colors.textPrimary,
+    fontSize: THEME.typography.sizes.base,
+    fontWeight: '700',
   },
   cancelButton: {
     width: 36,
