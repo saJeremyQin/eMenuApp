@@ -17,6 +17,8 @@ export interface OrderBatch {
   batchId: string;
   items: OrderItem[];
   confirmedAt: string;
+  tabId: string; // Associate batch with specific diner
+  dinerId: string; // Store diner ID for filtering
 }
 
 export interface Order {
@@ -43,12 +45,14 @@ export interface DraftItem {
   price: number;
   quantity: number;
   notes?: string;
+  dinerId: string; // Associate draft items with specific diner
 }
 
 export interface DinerTab {
   dinerId: string;
   tabId: string;
   name: string; // '🍴' for default, or user-provided name like 'Bob', 'Alice'
+  tableNumber: string; // Associate diner with specific table
 }
 
 interface OrderState {
@@ -65,9 +69,7 @@ interface OrderState {
 const initialState: OrderState = {
   currentOrder: null,
   draftItems: [],
-  dinerTabs: [
-    { dinerId: '0', tabId: 'tab-0', name: '🍴' } // Default: no split meal
-  ],
+  dinerTabs: [], // Will be populated based on selected table
   isLoading: false,
   error: null,
   selectedTableNumber: null,
@@ -95,11 +97,11 @@ const orderSlice = createSlice({
     // 添加菜品到草稿
     addDraftItem: (state, action: PayloadAction<DraftItem>) => {
       const existingIndex = state.draftItems.findIndex(
-        item => item.dishId === action.payload.dishId
+        item => item.dishId === action.payload.dishId && item.dinerId === action.payload.dinerId
       );
 
       if (existingIndex >= 0) {
-        // 如果菜品已存在，增加数量
+        // 如果菜品已存在于当前diner，增加数量
         state.draftItems[existingIndex].quantity += action.payload.quantity;
       } else {
         // 新增菜品
@@ -110,14 +112,16 @@ const orderSlice = createSlice({
     // 更新草稿菜品数量
     updateDraftItemQuantity: (
       state,
-      action: PayloadAction<{ dishId: string; quantity: number }>
+      action: PayloadAction<{ dishId: string; quantity: number; dinerId: string }>
     ) => {
-      const item = state.draftItems.find(i => i.dishId === action.payload.dishId);
+      const item = state.draftItems.find(
+        i => i.dishId === action.payload.dishId && i.dinerId === action.payload.dinerId
+      );
       if (item) {
         item.quantity = Math.max(0, action.payload.quantity);
         if (item.quantity === 0) {
           state.draftItems = state.draftItems.filter(
-            i => i.dishId !== action.payload.dishId
+            i => !(i.dishId === action.payload.dishId && i.dinerId === action.payload.dinerId)
           );
         }
       }
@@ -126,27 +130,62 @@ const orderSlice = createSlice({
     // 更新草稿菜品备注
     updateDraftItemNotes: (
       state,
-      action: PayloadAction<{ dishId: string; notes: string }>
+      action: PayloadAction<{ dishId: string; notes: string; dinerId: string }>
     ) => {
-      const item = state.draftItems.find(i => i.dishId === action.payload.dishId);
+      const item = state.draftItems.find(
+        i => i.dishId === action.payload.dishId && i.dinerId === action.payload.dinerId
+      );
       if (item) {
         item.notes = action.payload.notes;
       }
     },
 
     // 删除草稿菜品
-    removeDraftItem: (state, action: PayloadAction<string>) => {
-      state.draftItems = state.draftItems.filter(i => i.dishId !== action.payload);
+    removeDraftItem: (state, action: PayloadAction<{ dishId: string; dinerId: string }>) => {
+      state.draftItems = state.draftItems.filter(
+        i => !(i.dishId === action.payload.dishId && i.dinerId === action.payload.dinerId)
+      );
     },
 
-    // 清空所有草稿
-    clearDraftItems: (state) => {
-      state.draftItems = [];
+    // 清空草稿菜品（清除指定diner的，如果不指定则清除所有）
+    clearDraftItems: (state, action: PayloadAction<string | undefined>) => {
+      if (action.payload) {
+        // Clear only for the specified diner
+        state.draftItems = state.draftItems.filter(item => item.dinerId !== action.payload);
+      } else {
+        // Clear all draft items
+        state.draftItems = [];
+      }
     },
 
     // 设置选中的桌号
     setSelectedTable: (state, action: PayloadAction<string>) => {
-      state.selectedTableNumber = action.payload;
+      const tableNumber = action.payload;
+      state.selectedTableNumber = tableNumber;
+      
+      // Get existing diners for this table
+      const tableDiners = state.dinerTabs.filter(tab => tab.tableNumber === tableNumber);
+      
+      if (tableDiners.length === 0) {
+        // First time opening this table: add default diner
+        const defaultTabId = `tab-${tableNumber}-0`;
+        state.dinerTabs.push({
+          dinerId: '0',
+          tabId: defaultTabId,
+          name: '🍴',
+          tableNumber,
+        });
+        state.selectedDinerId = '0';
+        state.selectedTabId = defaultTabId;
+      } else {
+        // Table already has diners: restore to first/default diner
+        const defaultTab = tableDiners.find(tab => tab.dinerId === '0') || tableDiners[0];
+        state.selectedDinerId = defaultTab.dinerId;
+        state.selectedTabId = defaultTab.tabId;
+      }
+      
+      // Clear draft items (new editing session for this table)
+      state.draftItems = [];
     },
 
     // 设置分餐信息
@@ -163,11 +202,16 @@ const orderSlice = createSlice({
       state,
       action: PayloadAction<{ name: string }>
     ) => {
-      const nextDinerId = state.dinerTabs.length.toString();
+      if (!state.selectedTableNumber) return;
+      // Count diners for current table only
+      const tableNumber = state.selectedTableNumber;
+      const tableDiners = state.dinerTabs.filter(tab => tab.tableNumber === tableNumber);
+      const nextDinerId = tableDiners.length.toString();
       const newTab: DinerTab = {
         dinerId: nextDinerId,
-        tabId: `tab-${nextDinerId}`,
+        tabId: `tab-${tableNumber}-${nextDinerId}`,
         name: action.payload.name,
+        tableNumber,
       };
       state.dinerTabs.push(newTab);
       // 自动切换到新的 diner
@@ -184,21 +228,25 @@ const orderSlice = createSlice({
         console.warn('Cannot remove default diner (diner-0)');
         return;
       }
-      state.dinerTabs = state.dinerTabs.filter(tab => tab.dinerId !== action.payload);
+      state.dinerTabs = state.dinerTabs.filter(
+        tab => !(tab.dinerId === action.payload && tab.tableNumber === state.selectedTableNumber)
+      );
       // 如果删除的是当前选中的 diner，切换回 diner-0
       if (state.selectedDinerId === action.payload) {
         state.selectedDinerId = '0';
-        state.selectedTabId = 'tab-0';
+        state.selectedTabId = state.selectedTableNumber ? `tab-${state.selectedTableNumber}-0` : 'tab-0';
       }
     },
 
-    // 重置分餐（返回到只有 diner-0）
+    // 重置分餐（删除当前表的所有 diner，只保留其他表的）
     resetDinerTabs: (state) => {
-      state.dinerTabs = [
-        { dinerId: '0', tabId: 'tab-0', name: '🍴' }
-      ];
+      if (state.selectedTableNumber) {
+        state.dinerTabs = state.dinerTabs.filter(
+          tab => tab.tableNumber !== state.selectedTableNumber
+        );
+      }
       state.selectedDinerId = '0';
-      state.selectedTabId = 'tab-0';
+      state.selectedTabId = state.selectedTableNumber ? `tab-${state.selectedTableNumber}-0` : 'tab-0';
     },
 
     // 设置加载状态

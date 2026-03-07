@@ -20,6 +20,8 @@ export const GET_ORDER = gql`
       updatedAt
       batches {
         batchId
+        tabId
+        dinerId
         confirmedAt
         items {
           itemId
@@ -61,6 +63,8 @@ export const GET_TABLE_STATUS = gql`
         updatedAt
         batches {
           batchId
+          tabId
+          dinerId
           confirmedAt
           items {
             itemId
@@ -82,6 +86,8 @@ export const GET_TABLE_STATUS = gql`
         confirmedAmount
         batches {
           batchId
+          tabId
+          dinerId
           confirmedAt
           items {
             itemId

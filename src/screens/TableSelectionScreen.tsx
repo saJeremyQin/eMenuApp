@@ -42,7 +42,7 @@ export default function TableSelectionScreen() {
   }));
 
   const handleSelectTable = (tableNumber: string) => {
-    dispatch(setSelectedTable(tableNumber));
+    dispatch(setSelectedTable(tableNumber)); // Handles reset and initialization
     navigation.navigate('Menu');
   };
 

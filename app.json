@@ -1,4 +1,17 @@
 {
   "name": "eMenuApp",
-  "displayName": "eMenuApp"
+  "displayName": "eMenuApp",
+  "expo": {
+    "orientation": "landscape",
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ]
+    ]
+  }
 }

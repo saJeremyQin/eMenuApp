@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,70 +6,39 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  TextInput,
   StyleSheet,
+  Modal,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigation } from '@react-navigation/native';
 import { RootState, AppDispatch } from '../store/store';
-import {
-  updateDraftItemQuantity,
-  removeDraftItem,
-  clearDraftItems,
-} from '../store/orderSlice';
+import { clearDraftItems } from '../store/orderSlice';
 import { useConfirmOrderItems } from '../hooks/useOrder';
 import { THEME } from '../config/theme';
 
-export default function OrderReviewScreen() {
+interface OrderReviewModalProps {
+  visible: boolean;
+  onClose: () => void;
+}
+
+export default function OrderReviewScreen({ visible, onClose }: OrderReviewModalProps) {
   const dispatch = useDispatch<AppDispatch>();
-  const navigation = useNavigation<any>();
-  const draftItems = useSelector((state: RootState) => state.order.draftItems);
+  const allDraftItems = useSelector((state: RootState) => state.order.draftItems);
   const selectedTableNumber = useSelector((state: RootState) => state.order.selectedTableNumber);
   const selectedDinerId = useSelector((state: RootState) => state.order.selectedDinerId);
   const selectedTabId = useSelector((state: RootState) => state.order.selectedTabId);
   
+  // Filter draft items to show only for the current diner
+  const draftItems = useMemo(() => {
+    return allDraftItems.filter(item => item.dinerId === selectedDinerId);
+  }, [allDraftItems, selectedDinerId]);
+  
   const { confirmOrder, isSubmitting } = useConfirmOrderItems();
   const [isLoading, setIsLoading] = useState(false);
-
-  if (!selectedTableNumber || draftItems.length === 0) {
-    return (
-      <View style={[styles.container, { backgroundColor: THEME.colors.darkBg }]}>
-        <View style={[styles.header, { borderBottomColor: THEME.colors.accent }]}>
-          <Text style={[styles.headerTitle, { color: THEME.colors.textPrimary }]}>
-            📋 Order Review
-          </Text>
-        </View>
-        <View style={styles.emptyState}>
-          <Text style={[styles.emptyText, { color: THEME.colors.textPrimary }]}>
-            No items in order
-          </Text>
-          <TouchableOpacity
-            style={[styles.backButton, { backgroundColor: THEME.colors.accent }]}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backButtonText}>← Back to Menu</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
 
   const totalPrice = draftItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const totalItems = draftItems.reduce((sum, item) => sum + item.quantity, 0);
 
-  const handleRemoveItem = (dishId: string) => {
-    dispatch(removeDraftItem(dishId));
-  };
-
-  const handleUpdateQuantity = (dishId: string, quantity: number) => {
-    if (quantity === 0) {
-      dispatch(removeDraftItem(dishId));
-    } else {
-      dispatch(updateDraftItemQuantity({ dishId, quantity }));
-    }
-  };
-
-  const handleSubmitOrder = async () => {
+  const handleConfirm = async () => {
     if (!selectedTableNumber) {
       Alert.alert('Error', 'No table selected');
       return;
@@ -82,22 +51,20 @@ export default function OrderReviewScreen() {
 
     setIsLoading(true);
     try {
-      // 准备要发送的菜品数据
       const items = draftItems.map(item => ({
         dishId: item.dishId,
         quantity: item.quantity,
         notes: item.notes || undefined,
       }));
 
-      console.log('📤 OrderReviewScreen: Sending order to kitchen', {
+      console.log('📤 Sending order to kitchen', {
         tableNumber: selectedTableNumber,
         dinerId: selectedDinerId,
         tabId: selectedTabId,
         items,
       });
 
-      // 调用送厨 API
-      const orderResult = await confirmOrder({
+      await confirmOrder({
         tableNumber: selectedTableNumber,
         dinerId: selectedDinerId,
         tabId: selectedTabId,
@@ -105,16 +72,14 @@ export default function OrderReviewScreen() {
         isFromCustomerScan: false,
       });
 
-      console.log('📦 OrderReviewScreen: Order sent successfully', orderResult);
-
-      // 送厨成功
+      console.log('✅ Order sent successfully');
       Alert.alert('Success', 'Order sent to kitchen', [
         {
           text: 'OK',
           onPress: () => {
-            console.log('✅ OrderReviewScreen: Clearing draft items and navigating back');
-            dispatch(clearDraftItems());
-            navigation.navigate('Menu');
+            // Clear only the current diner's draft items
+            dispatch(clearDraftItems(selectedDinerId));
+            onClose();
           },
         },
       ]);
@@ -127,160 +92,151 @@ export default function OrderReviewScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: THEME.colors.darkBg }]}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: THEME.colors.accent }]}>
-        <View>
-          <Text style={[styles.headerTitle, { color: THEME.colors.textPrimary }]}>
-            📋 Order Review
-          </Text>
-          <Text style={[styles.tableLabel, { color: THEME.colors.textSecondary }]}>
-            Table {selectedTableNumber}
-          </Text>
-        </View>
-      </View>
-
-      {/* Order Items */}
-      <ScrollView style={styles.itemsList}>
-        {draftItems.map((item) => (
-          <View
-            key={item.dishId}
-            style={[
-              styles.orderItem,
-              {
-                backgroundColor: THEME.colors.cardBg,
-                borderColor: THEME.colors.borderColor,
-              },
-            ]}
-          >
-            <View style={styles.itemInfo}>
-              <Text style={[styles.itemName, { color: THEME.colors.textPrimary }]}>
-                {item.name}
-              </Text>
-              <Text style={[styles.itemPrice, { color: THEME.colors.accent }]}>
-                €{(item.price / 100).toFixed(2)} × {item.quantity}
-              </Text>
-              <Text style={[styles.itemTotal, { color: THEME.colors.accent }]}>
-                Total: €{((item.price * item.quantity) / 100).toFixed(2)}
-              </Text>
-            </View>
-
-            <View style={styles.quantityControls}>
-              <TouchableOpacity
-                style={styles.quantityBtn}
-                onPress={() => handleUpdateQuantity(item.dishId, item.quantity - 1)}
-              >
-                <Text style={[styles.quantityBtnText, { color: THEME.colors.accent }]}>−</Text>
-              </TouchableOpacity>
-              <Text style={[styles.quantityValue, { color: THEME.colors.textPrimary }]}>
-                {item.quantity}
-              </Text>
-              <TouchableOpacity
-                style={styles.quantityBtn}
-                onPress={() => handleUpdateQuantity(item.dishId, item.quantity + 1)}
-              >
-                <Text style={[styles.quantityBtnText, { color: THEME.colors.accent }]}>+</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.removeBtn}
-                onPress={() => handleRemoveItem(item.dishId)}
-              >
-                <Text style={styles.removeBtnText}>×</Text>
-              </TouchableOpacity>
-            </View>
+    <Modal 
+      visible={visible} 
+      transparent 
+      animationType="fade"
+      supportedOrientations={['landscape', 'portrait']}
+    >
+      <View style={styles.overlay}>
+        <TouchableOpacity 
+          style={styles.backdrop} 
+          activeOpacity={1}
+          onPress={onClose}
+        />
+        
+        <View style={[styles.modal, { backgroundColor: THEME.colors.darkBg }]}>
+          {/* Title */}
+          <View style={styles.title}>
+            <Text style={[styles.titleText, { color: THEME.colors.textPrimary }]}>
+              Send to Kitchen
+            </Text>
+            <Text style={[styles.subtitle, { color: THEME.colors.textSecondary }]}>
+              Table {selectedTableNumber}
+            </Text>
           </View>
-        ))}
-      </ScrollView>
 
-      {/* Bottom Summary */}
-      <View
-        style={[
-          styles.summary,
-          {
-            borderTopColor: THEME.colors.borderColor,
-            backgroundColor: THEME.colors.cardBg,
-          },
-        ]}
-      >
-        <View style={styles.summaryRow}>
-          <Text style={[styles.summaryLabel, { color: THEME.colors.textSecondary }]}>
-            {totalItems} Items
-          </Text>
-          <Text style={[styles.summaryValue, { color: THEME.colors.textPrimary }]}>
-            €{(totalPrice / 100).toFixed(2)}
-          </Text>
+          {/* Items List */}
+          <ScrollView style={styles.itemsContainer}>
+            {draftItems.map((item, index) => (
+              <View key={item.dishId} style={[styles.item, { borderBottomColor: THEME.colors.borderColor }]}>
+                <View style={styles.itemLeft}>
+                  <Text style={[styles.itemName, { color: THEME.colors.textPrimary }]}>
+                    {item.name}
+                  </Text>
+                  <Text style={[styles.itemPrice, { color: THEME.colors.textSecondary }]}>
+                    €{(item.price / 100).toFixed(2)}
+                  </Text>
+                </View>
+                <Text style={[styles.itemQty, { color: THEME.colors.accent }]}>
+                  ×{item.quantity}
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+
+          {/* Summary */}
+          <View style={[styles.summary, { borderTopColor: THEME.colors.borderColor }]}>
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: THEME.colors.textSecondary }]}>
+                Total:
+              </Text>
+              <Text style={[styles.summaryTotal, { color: THEME.colors.accent }]}>
+                €{(totalPrice / 100).toFixed(2)}
+              </Text>
+            </View>
+            <Text style={[styles.itemCount, { color: THEME.colors.textSecondary }]}>
+              {totalItems} items
+            </Text>
+          </View>
+
+          {/* Buttons */}
+          <View style={styles.buttons}>
+            <TouchableOpacity 
+              activeOpacity={0.7}
+              style={[styles.btn, styles.cancelBtn, { borderColor: THEME.colors.textSecondary }]}
+              onPress={() => {
+                console.log('Cancel pressed');
+                onClose();
+              }}
+            >
+              <Text style={[styles.btnText, { color: THEME.colors.textSecondary }]}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              activeOpacity={0.85}
+              style={[styles.btn, styles.confirmBtn, { backgroundColor: THEME.colors.accent }]}
+              onPress={handleConfirm}
+              disabled={isLoading || isSubmitting}
+            >
+              {isLoading || isSubmitting ? (
+                <ActivityIndicator color={THEME.colors.textPrimary} />
+              ) : (
+                <Text style={[styles.btnText, { color: THEME.colors.textPrimary }]}>
+                  Confirm
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
-
-        <TouchableOpacity
-          style={[styles.submitButton, { backgroundColor: THEME.colors.accent }]}
-          onPress={handleSubmitOrder}
-          disabled={isSubmitting || isLoading}
-        >
-          {isSubmitting || isLoading ? (
-            <ActivityIndicator color={THEME.colors.textPrimary} />
-          ) : (
-            <Text style={styles.submitButtonText}>Send to Kitchen →</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.backButton, { borderColor: THEME.colors.accent }]}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={[styles.backButtonText, { color: THEME.colors.accent }]}>
-            ← Continue Ordering
-          </Text>
-        </TouchableOpacity>
       </View>
-    </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  overlay: {
     flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  header: {
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  modal: {
+    width: '90%',
+    maxWidth: 500,
+    borderRadius: THEME.borderRadius.lg,
+    maxHeight: '80%',
+    minHeight: 300,
+    flexDirection: 'column',
+  },
+  title: {
+    paddingHorizontal: THEME.spacing.lg,
     paddingVertical: THEME.spacing.lg,
-    paddingHorizontal: THEME.spacing.xl,
-    borderBottomWidth: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.colors.borderColor,
   },
-  headerTitle: {
-    fontSize: THEME.typography.sizes['2xl'],
+  titleText: {
+    fontSize: THEME.typography.sizes.xl,
     fontWeight: '700',
     marginBottom: THEME.spacing.xs,
   },
-  tableLabel: {
+  subtitle: {
     fontSize: THEME.typography.sizes.sm,
   },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: THEME.spacing.xl,
-  },
-  emptyText: {
-    fontSize: THEME.typography.sizes.lg,
-    marginBottom: THEME.spacing.lg,
-  },
-  itemsList: {
-    flex: 1,
+  itemsContainer: {
+    flexGrow: 1,
     paddingHorizontal: THEME.spacing.lg,
-    paddingVertical: THEME.spacing.lg,
+    paddingVertical: THEME.spacing.md,
   },
-  orderItem: {
-    borderRadius: THEME.borderRadius.md,
-    padding: THEME.spacing.lg,
-    marginBottom: THEME.spacing.md,
-    borderWidth: 1,
+  item: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: THEME.spacing.md,
+    borderBottomWidth: 1,
   },
-  itemInfo: {
+  itemLeft: {
     flex: 1,
-    marginRight: THEME.spacing.lg,
+    marginRight: THEME.spacing.md,
   },
   itemName: {
     fontSize: THEME.typography.sizes.base,
@@ -289,85 +245,58 @@ const styles = StyleSheet.create({
   },
   itemPrice: {
     fontSize: THEME.typography.sizes.sm,
-    marginBottom: THEME.spacing.sm,
   },
-  itemTotal: {
-    fontSize: THEME.typography.sizes.base,
-    fontWeight: '700',
-  },
-  quantityControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: THEME.spacing.sm,
-  },
-  quantityBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: THEME.borderRadius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: THEME.colors.cardBgAlt,
-  },
-  quantityBtnText: {
+  itemQty: {
     fontSize: THEME.typography.sizes.lg,
     fontWeight: '700',
-  },
-  quantityValue: {
-    fontSize: THEME.typography.sizes.base,
-    fontWeight: '600',
-    minWidth: 30,
-    textAlign: 'center',
-  },
-  removeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: THEME.borderRadius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: THEME.colors.error,
-  },
-  removeBtnText: {
-    color: THEME.colors.textPrimary,
-    fontSize: THEME.typography.sizes.xl,
-    fontWeight: '700',
+    minWidth: 40,
+    textAlign: 'right',
   },
   summary: {
     paddingHorizontal: THEME.spacing.lg,
-    paddingVertical: THEME.spacing.lg,
+    paddingVertical: THEME.spacing.md,
     borderTopWidth: 1,
-    gap: THEME.spacing.md,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: THEME.spacing.md,
+    marginBottom: THEME.spacing.sm,
   },
   summaryLabel: {
     fontSize: THEME.typography.sizes.base,
   },
-  summaryValue: {
-    fontSize: THEME.typography.sizes.xl,
+  summaryTotal: {
+    fontSize: THEME.typography.sizes.lg,
     fontWeight: '700',
   },
-  submitButton: {
+  itemCount: {
+    fontSize: THEME.typography.sizes.sm,
+    textAlign: 'right',
+  },
+  buttons: {
+    flexDirection: 'row',
+    gap: THEME.spacing.md,
+    paddingHorizontal: THEME.spacing.lg,
+    paddingTop: THEME.spacing.md,
+    paddingBottom: THEME.spacing.lg,
+  },
+  btn: {
+    flex: 1,
     paddingVertical: THEME.spacing.lg,
     borderRadius: THEME.borderRadius.md,
     alignItems: 'center',
-    marginBottom: THEME.spacing.md,
+    justifyContent: 'center',
+    minHeight: 48,
   },
-  submitButtonText: {
-    color: THEME.colors.textPrimary,
+  cancelBtn: {
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  confirmBtn: {
+    backgroundColor: THEME.colors.accent,
+  },
+  btnText: {
     fontSize: THEME.typography.sizes.base,
     fontWeight: '700',
-  },
-  backButton: {
-    paddingVertical: THEME.spacing.md,
-    borderRadius: THEME.borderRadius.md,
-    alignItems: 'center',
-    borderWidth: 2,
-  },
-  backButtonText: {
-    fontSize: THEME.typography.sizes.base,
-    fontWeight: '600',
   },
 });

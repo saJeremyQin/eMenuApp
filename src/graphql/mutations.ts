@@ -20,6 +20,8 @@ export const CONFIRM_ORDER_ITEMS = gql`
       updatedAt
       batches {
         batchId
+        tabId
+        dinerId
         confirmedAt
         items {
           itemId
@@ -58,6 +60,8 @@ export const CANCEL_ORDER_ITEM = gql`
       updatedAt
       batches {
         batchId
+        tabId
+        dinerId
         confirmedAt
         items {
           itemId
@@ -96,6 +100,8 @@ export const PAY_ORDER = gql`
       updatedAt
       batches {
         batchId
+        tabId
+        dinerId
         confirmedAt
         items {
           itemId
@@ -134,6 +140,8 @@ export const CANCEL_ORDER = gql`
       updatedAt
       batches {
         batchId
+        tabId
+        dinerId
         confirmedAt
         items {
           itemId

@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { RootState, AppDispatch } from '../store/store';
 import { addDraftItem, updateDraftItemQuantity, removeDraftItem, addDinerTab, setDinerInfo, DinerTab } from '../store/orderSlice';
 import { useCancelOrderItem } from '../hooks/useOrder';
+import { useDinerOrders } from '../hooks/useDinerOrders';
 import {
   selectDishTypes,
   selectDishesByType,
@@ -26,6 +27,7 @@ import {
 import { THEME } from '../config/theme';
 import { formatDateTime } from '../lib/dateUtils';
 import DishCard from '../components/DishCard';
+import OrderReviewScreen from './OrderReviewScreen';
 
 interface DraftItemUI extends Dish {
   quantity: number;
@@ -35,13 +37,41 @@ export default function MenuScreen() {
   const dispatch = useDispatch<AppDispatch>();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
-  const draftItems = useSelector((state: RootState) => state.order.draftItems);
+  const allDraftItems = useSelector((state: RootState) => state.order.draftItems);
   
   // 从 Redux 获取分餐信息
-  const dinerTabs = useSelector((state: RootState) => state.order.dinerTabs);
+  const selectedTableNumber = useSelector((state: RootState) => state.order.selectedTableNumber);
+  const allDinerTabs = useSelector((state: RootState) => state.order.dinerTabs);
   const selectedDinerId = useSelector((state: RootState) => state.order.selectedDinerId);
   const selectedTabId = useSelector((state: RootState) => state.order.selectedTabId);
   const currentOrder = useSelector((state: RootState) => state.order.currentOrder);
+  
+  // 使用 hook 管理 diner 订单切换
+  const { isLoading: isDinerOrdersLoading } = useDinerOrders();
+  
+  // Filter diner tabs to show only for the current table
+  const dinerTabs = useMemo(() => {
+    return selectedTableNumber ? allDinerTabs.filter(tab => tab.tableNumber === selectedTableNumber) : [];
+  }, [allDinerTabs, selectedTableNumber]);
+
+  // Verify selectedDinerId belongs to current table, reset if not
+  useEffect(() => {
+    if (selectedTableNumber && dinerTabs.length > 0) {
+      const dinerExists = dinerTabs.some(tab => tab.dinerId === selectedDinerId);
+      if (!dinerExists) {
+        // Reset to default diner for current table
+        const defaultTab = dinerTabs.find(tab => tab.dinerId === '0');
+        if (defaultTab) {
+          dispatch(setDinerInfo({ dinerId: '0', tabId: defaultTab.tabId }));
+        }
+      }
+    }
+  }, [selectedTableNumber, dinerTabs, selectedDinerId, dispatch]);
+  
+  // Filter draft items to show only for the current diner
+  const draftItems = useMemo(() => {
+    return allDraftItems.filter(item => item.dinerId === selectedDinerId);
+  }, [allDraftItems, selectedDinerId]);
   
   // 从 Redux 获取缓存的菜品和分类
   const allDishTypes = useSelector(selectActiveDishTypes);
@@ -57,6 +87,7 @@ export default function MenuScreen() {
 
   const [dimensions, setDimensions] = useState(Dimensions.get('window'));
   const [editMode, setEditMode] = useState(false);
+  const [showOrderReviewModal, setShowOrderReviewModal] = useState(false);
   const { cancelItem } = useCancelOrderItem();
 
   const isLandscape = dimensions.width > dimensions.height;
@@ -103,9 +134,18 @@ export default function MenuScreen() {
       hasOrder: !!currentOrder,
       orderId: currentOrder?.id,
       batchesCount: currentOrder?.batches?.length || 0,
+      selectedDinerId,
+      selectedTabId,
+      batches: currentOrder?.batches?.map((b: any) => ({
+        batchId: b.batchId,
+        tabId: b.tabId,
+        dinerId: b.dinerId,
+        itemsCount: b.items?.length,
+        itemStatuses: b.items?.map((i: any) => i.status),
+      })),
       totalConfirmedAmount: currentOrder?.totalConfirmedAmount,
     });
-  }, [currentOrder]);
+  }, [currentOrder, selectedDinerId, selectedTabId]);
 
   // 当菜品分类加载完后，自动选中第一个
   useEffect(() => {
@@ -129,15 +169,16 @@ export default function MenuScreen() {
         name: dish.name,
         price: dish.price,
         quantity: 1,
+        dinerId: selectedDinerId,
       })
     );
   };
 
   const handleUpdateQuantity = (dishId: string, quantity: number) => {
     if (quantity === 0) {
-      dispatch(removeDraftItem(dishId));
+      dispatch(removeDraftItem({ dishId, dinerId: selectedDinerId }));
     } else {
-      dispatch(updateDraftItemQuantity({ dishId, quantity }));
+      dispatch(updateDraftItemQuantity({ dishId, quantity, dinerId: selectedDinerId }));
     }
   };
 
@@ -200,22 +241,40 @@ export default function MenuScreen() {
   const totalDraftItems = draftItems.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = draftItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-  // 提取已送厨的批次（保留批次结构）
+  // 提取已送厨的批次（保留批次结构，按当前 diner 过滤）
   const confirmedBatches = useMemo(() => {
     if (!currentOrder?.batches) {
       console.log('🔍 MenuScreen: No currentOrder.batches', currentOrder);
       return [];
     }
-    // 只返回包含已确认菜品的批次
-    const batchesWithConfirmed = currentOrder.batches.filter(batch =>
-      batch.items.some(item => item.status === 'CONFIRMED')
-    );
-    console.log('🔍 MenuScreen: Confirmed batches', {
+    
+    console.log('🔍 MenuScreen: Checking batches', {
+      totalBatches: currentOrder.batches.length,
+      selectedDinerId,
+      batchesDetail: currentOrder.batches.map((b: any, idx: number) => ({
+        index: idx,
+        batchId: b.batchId,
+        dinerId: b.dinerId,
+        tabId: b.tabId,
+        hasItems: !!b.items,
+        itemsCount: b.items?.length,
+        itemStatuses: b.items?.map((i: any) => i.status),
+      })),
+    });
+    
+    // Filter batches for current diner/tab and those with confirmed items
+    const batchesWithConfirmed = currentOrder.batches.filter(batch => {
+      const isForCurrentDiner = batch.dinerId === selectedDinerId;
+      const hasConfirmedItems = batch.items.some(item => item.status === 'CONFIRMED');
+      console.log(`  Batch ${batch.batchId}: dinerId=${batch.dinerId}, isForCurrentDiner=${isForCurrentDiner}, hasConfirmedItems=${hasConfirmedItems}`);
+      return isForCurrentDiner && hasConfirmedItems;
+    });
+    console.log('🔍 MenuScreen: Confirmed batches for diner', selectedDinerId, {
       batchesCount: batchesWithConfirmed.length,
       batches: batchesWithConfirmed,
     });
     return batchesWithConfirmed;
-  }, [currentOrder]);
+  }, [currentOrder, selectedDinerId]);
 
   // 跟踪所有已确认菜品总数（用于计算总金额）
   const confirmedItems = useMemo(() => {
@@ -226,10 +285,13 @@ export default function MenuScreen() {
 
   const cancelledItems = useMemo(() => {
     if (!currentOrder?.batches) return [];
-    return currentOrder.batches.flatMap(batch =>
-      batch.items.filter(item => item.status === 'CANCELLED')
-    );
-  }, [currentOrder]);
+    // Filter cancelled items for current diner only
+    return currentOrder.batches
+      .filter(batch => batch.dinerId === selectedDinerId)
+      .flatMap(batch =>
+        batch.items.filter(item => item.status === 'CANCELLED')
+      );
+  }, [currentOrder, selectedDinerId]);
 
   const totalConfirmedAmount = confirmedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const totalCancelledAmount = cancelledItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -585,9 +647,9 @@ export default function MenuScreen() {
           {totalDraftItems > 0 && (
             <TouchableOpacity
               style={[styles.reviewButton, { backgroundColor: THEME.colors.accent, marginTop: THEME.spacing.md }]}
-              onPress={() => navigation.navigate('OrderReview')}
+              onPress={() => setShowOrderReviewModal(true)}
             >
-              <Text style={styles.reviewButtonText}>Review Order</Text>
+              <Text style={styles.reviewButtonText}>Send to Kitchen</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -616,6 +678,12 @@ export default function MenuScreen() {
         {menuSection}
         {cartSection}
         {debugPanel}
+        
+        {/* Order Review Modal */}
+        <OrderReviewScreen
+          visible={showOrderReviewModal}
+          onClose={() => setShowOrderReviewModal(false)}
+        />
       </View>
     );
   }
@@ -644,6 +712,12 @@ export default function MenuScreen() {
       
       {/* Debug Panel */}
       {debugPanel}
+      
+      {/* Order Review Modal */}
+      <OrderReviewScreen
+        visible={showOrderReviewModal}
+        onClose={() => setShowOrderReviewModal(false)}
+      />
     </View>
   );
 }
