@@ -391,20 +391,6 @@ export default function MenuScreen() {
     </View>
   );
 
-  // Debug Panel - 固定在底部，始终显示
-  const debugPanel = (
-    <View style={{ backgroundColor: '#222', padding: 8, borderTopWidth: 1, borderTopColor: '#444', position: 'absolute', bottom: 0, left: 0, right: 0 }}>
-      <Text style={{ color: '#0f0', fontSize: 9, fontFamily: 'Courier New' }}>
-        Loaded={dishesLoaded ? 'Y' : 'N'} Loading={dishesLoading ? 'Y' : 'N'} Error={dishesError ? 'Y' : 'N'} | Types={allDishTypes.length} Dishes={allDishes.length} Selected={selectedDishes.length}
-      </Text>
-      {dishesError && (
-        <Text style={{ color: '#f00', fontSize: 8, fontFamily: 'Courier New' }}>
-          Error: {dishesError.substring(0, 60)}...
-        </Text>
-      )}
-    </View>
-  );
-
   // Right side: Cart with diner tabs
   const cartSection = (
     <View style={[styles.rightPanel, { backgroundColor: THEME.colors.cardBg }]}>
@@ -697,7 +683,6 @@ export default function MenuScreen() {
         
         {menuSection}
         {cartSection}
-        {debugPanel}
         
         {/* Order Review Modal */}
         <OrderReviewScreen
@@ -729,9 +714,6 @@ export default function MenuScreen() {
         {menuSection}
         {cartSection}
       </View>
-      
-      {/* Debug Panel */}
-      {debugPanel}
       
       {/* Order Review Modal */}
       <OrderReviewScreen
