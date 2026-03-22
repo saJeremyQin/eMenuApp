@@ -11,6 +11,8 @@
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		7CA446B82ED167FE0012D438 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 7CA446B72ED167FE0012D438 /* GoogleService-Info.plist */; };
+		7CBBC7582F6ABF75004AF740 /* PrintModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 7CBBC7562F6ABF75004AF740 /* PrintModule.m */; };
+		7CBBC7592F6ABF75004AF740 /* PrintModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CBBC7572F6ABF75004AF740 /* PrintModule.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		E04A245CAFEF17B82AC9D465 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
@@ -25,6 +27,10 @@
 		5DCACB8F33CDC322A6C60F78 /* libPods-eMenuApp.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-eMenuApp.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = eMenuApp/AppDelegate.swift; sourceTree = "<group>"; };
 		7CA446B72ED167FE0012D438 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		7CBBC7552F6ABF75004AF740 /* eMenuApp-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "eMenuApp-Bridging-Header.h"; sourceTree = "<group>"; };
+		7CBBC7562F6ABF75004AF740 /* PrintModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PrintModule.m; sourceTree = "<group>"; };
+		7CBBC7572F6ABF75004AF740 /* PrintModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintModule.swift; sourceTree = "<group>"; };
+		7CBBC75A2F6ABF79004AF740 /* eMenuApp-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "eMenuApp-Bridging-Header.h"; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = eMenuApp/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
@@ -72,12 +78,16 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
+				7CBBC7552F6ABF75004AF740 /* eMenuApp-Bridging-Header.h */,
+				7CBBC7562F6ABF75004AF740 /* PrintModule.m */,
+				7CBBC7572F6ABF75004AF740 /* PrintModule.swift */,
 				7CA446B72ED167FE0012D438 /* GoogleService-Info.plist */,
 				13B07FAE1A68108700A75B9A /* eMenuApp */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				BBD78D7AC51CEA395F1C20DB /* Pods */,
+				7CBBC75A2F6ABF79004AF740 /* eMenuApp-Bridging-Header.h */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -135,7 +145,7 @@
 				LastUpgradeCheck = 1210;
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
-						LastSwiftMigration = 1120;
+						LastSwiftMigration = 1620;
 					};
 				};
 			};
@@ -264,6 +274,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7CBBC7582F6ABF75004AF740 /* PrintModule.m in Sources */,
+				7CBBC7592F6ABF75004AF740 /* PrintModule.swift in Sources */,
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -295,6 +307,7 @@
 				PRODUCT_NAME = eMenuApp;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "eMenuApp-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -325,6 +338,7 @@
 				PRODUCT_NAME = eMenuApp;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "eMenuApp-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";

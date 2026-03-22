@@ -16,6 +16,7 @@ import { RootState, AppDispatch } from '../store/store';
 import { addDraftItem, updateDraftItemQuantity, removeDraftItem, addDinerTab, setDinerInfo, DinerTab } from '../store/orderSlice';
 import { useCancelOrderItem } from '../hooks/useOrder';
 import { useDinerOrders } from '../hooks/useDinerOrders';
+import { usePrintReceipt } from '../hooks/usePrintReceipt';
 import {
   selectDishTypes,
   selectDishesByType,
@@ -89,6 +90,7 @@ export default function MenuScreen() {
   const [editMode, setEditMode] = useState(false);
   const [showOrderReviewModal, setShowOrderReviewModal] = useState(false);
   const { cancelItem } = useCancelOrderItem();
+  const { showPrintDialog } = usePrintReceipt();
 
   const isLandscape = dimensions.width > dimensions.height;
 
@@ -653,8 +655,22 @@ export default function MenuScreen() {
           },
         ]}
         onPress={() => {
-          // TODO: Implement pay order logic
-          Alert.alert('Pay Order', 'Payment functionality coming soon');
+          Alert.alert(
+            'Pay Order',
+            'Confirm payment for this order?',
+            [
+              {
+                text: 'Cancel',
+                style: 'cancel',
+              },
+              {
+                text: 'Pay',
+                onPress: () => {
+                  showPrintDialog();
+                },
+              },
+            ]
+          );
         }}
       >
         <Text style={styles.payOrderButtonText}>💳 Pay Order</Text>
