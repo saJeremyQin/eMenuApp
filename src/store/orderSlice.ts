@@ -94,6 +94,24 @@ const orderSlice = createSlice({
       state.error = null;
     },
 
+    // 结束本次 dining session（整桌结账完成后）
+    completeDiningSession: (state) => {
+      const currentTableNumber = state.selectedTableNumber;
+
+      if (currentTableNumber) {
+        state.dinerTabs = state.dinerTabs.filter(
+          tab => tab.tableNumber !== currentTableNumber
+        );
+      }
+
+      state.currentOrder = null;
+      state.draftItems = [];
+      state.error = null;
+      state.selectedTableNumber = null;
+      state.selectedDinerId = '0';
+      state.selectedTabId = 'tab-0';
+    },
+
     // 添加菜品到草稿
     addDraftItem: (state, action: PayloadAction<DraftItem>) => {
       const existingIndex = state.draftItems.findIndex(
@@ -325,6 +343,7 @@ const orderSlice = createSlice({
 export const {
   setCurrentOrder,
   clearCurrentOrder,
+  completeDiningSession,
   addDraftItem,
   updateDraftItemQuantity,
   updateDraftItemNotes,

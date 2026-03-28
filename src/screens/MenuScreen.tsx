@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,8 +13,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation } from '@react-navigation/native';
 import { RootState, AppDispatch } from '../store/store';
-import { addDraftItem, updateDraftItemQuantity, removeDraftItem, addDinerTab, setDinerInfo, DinerTab } from '../store/orderSlice';
-import { useCancelOrderItem } from '../hooks/useOrder';
+import { addDraftItem, updateDraftItemQuantity, removeDraftItem, addDinerTab, setDinerInfo, setCurrentOrder, completeDiningSession, DinerTab } from '../store/orderSlice';
+import { useCancelOrderItem, usePayOrder } from '../hooks/useOrder';
 import { useDinerOrders } from '../hooks/useDinerOrders';
 import { usePrintReceipt } from '../hooks/usePrintReceipt';
 import {
@@ -46,9 +46,10 @@ export default function MenuScreen() {
   const selectedDinerId = useSelector((state: RootState) => state.order.selectedDinerId);
   const selectedTabId = useSelector((state: RootState) => state.order.selectedTabId);
   const currentOrder = useSelector((state: RootState) => state.order.currentOrder);
+  const selectedDinerIdStr = String(selectedDinerId);
   
   // 使用 hook 管理 diner 订单切换
-  const { isLoading: isDinerOrdersLoading } = useDinerOrders();
+  const { refreshTableOrders, tableOrders } = useDinerOrders();
   
   // Filter diner tabs to show only for the current table
   const dinerTabs = useMemo(() => {
@@ -58,7 +59,7 @@ export default function MenuScreen() {
   // Verify selectedDinerId belongs to current table, reset if not
   useEffect(() => {
     if (selectedTableNumber && dinerTabs.length > 0) {
-      const dinerExists = dinerTabs.some(tab => tab.dinerId === selectedDinerId);
+      const dinerExists = dinerTabs.some(tab => String(tab.dinerId) === selectedDinerIdStr);
       if (!dinerExists) {
         // Reset to default diner for current table
         const defaultTab = dinerTabs.find(tab => tab.dinerId === '0');
@@ -67,12 +68,12 @@ export default function MenuScreen() {
         }
       }
     }
-  }, [selectedTableNumber, dinerTabs, selectedDinerId, dispatch]);
+  }, [selectedTableNumber, dinerTabs, selectedDinerIdStr, dispatch]);
   
   // Filter draft items to show only for the current diner
   const draftItems = useMemo(() => {
-    return allDraftItems.filter(item => item.dinerId === selectedDinerId);
-  }, [allDraftItems, selectedDinerId]);
+    return allDraftItems.filter(item => String(item.dinerId) === selectedDinerIdStr);
+  }, [allDraftItems, selectedDinerIdStr]);
   
   // 从 Redux 获取缓存的菜品和分类
   const allDishTypes = useSelector(selectActiveDishTypes);
@@ -89,8 +90,17 @@ export default function MenuScreen() {
   const [dimensions, setDimensions] = useState(Dimensions.get('window'));
   const [editMode, setEditMode] = useState(false);
   const [showOrderReviewModal, setShowOrderReviewModal] = useState(false);
+  const [isMarkingPaid, setIsMarkingPaid] = useState(false);
+  const paidOrdersByTableRef = useRef<Record<string, any[]>>({});
+  const dinerActivityByTableRef = useRef<Record<string, Set<string>>>({});
   const { cancelItem } = useCancelOrderItem();
-  const { showPrintDialog } = usePrintReceipt();
+  const { payOrder: markPaidOrder, isSubmitting: isMarkPaidSubmitting } = usePayOrder();
+  const {
+    printReceipt,
+    previewReceipt,
+    printTableSummaryFromOrders,
+    previewTableSummaryFromOrders,
+  } = usePrintReceipt();
 
   const isLandscape = dimensions.width > dimensions.height;
 
@@ -184,6 +194,314 @@ export default function MenuScreen() {
     }
   };
 
+  const addPaidOrderSnapshot = (tableNumber: string, paidOrder: any) => {
+    const existing = paidOrdersByTableRef.current[tableNumber] || [];
+    const withoutSameId = existing.filter((o: any) => o.id !== paidOrder.id);
+    paidOrdersByTableRef.current[tableNumber] = [...withoutSameId, paidOrder];
+  };
+
+  const getPaidOrdersForTable = (tableNumber: string) => {
+    return paidOrdersByTableRef.current[tableNumber] || [];
+  };
+
+  const clearPaidOrdersForTable = (tableNumber: string) => {
+    delete paidOrdersByTableRef.current[tableNumber];
+  };
+
+  const trackDinerActivity = (tableNumber: string, dinerIds: Array<string | number | undefined>) => {
+    const normalized = dinerIds
+      .filter((id): id is string | number => id !== undefined && id !== null)
+      .map(id => String(id));
+
+    if (normalized.length === 0) return;
+
+    const existing = dinerActivityByTableRef.current[tableNumber] || new Set<string>();
+    normalized.forEach(id => existing.add(id));
+    dinerActivityByTableRef.current[tableNumber] = existing;
+  };
+
+  const getTrackedDinerActivity = (tableNumber: string) => {
+    return Array.from(dinerActivityByTableRef.current[tableNumber] || new Set<string>());
+  };
+
+  const clearTrackedDinerActivity = (tableNumber: string) => {
+    delete dinerActivityByTableRef.current[tableNumber];
+  };
+
+  useEffect(() => {
+    if (!selectedTableNumber || !currentOrder?.dinerId) {
+      return;
+    }
+
+    trackDinerActivity(selectedTableNumber, [currentOrder.dinerId]);
+  }, [selectedTableNumber, currentOrder?.dinerId]);
+
+  const askCurrentDinerReceipt = () => {
+    return new Promise<void>((resolve) => {
+      Alert.alert(
+        'Diner Receipt',
+        'Print receipt for this diner?',
+        [
+          {
+            text: 'No',
+            style: 'cancel',
+            onPress: () => resolve(),
+          },
+          {
+            text: 'Preview',
+            onPress: async () => {
+              try {
+                await previewReceipt(false);
+              } finally {
+                resolve();
+              }
+            },
+          },
+          {
+            text: 'Print',
+            onPress: async () => {
+              try {
+                await printReceipt(false);
+              } finally {
+                resolve();
+              }
+            },
+          },
+        ]
+      );
+    });
+  };
+
+  const askTableSummaryReceipt = (orders: any[]) => {
+    return new Promise<void>((resolve) => {
+      Alert.alert(
+        'Table Summary Receipt',
+        'All diners are marked paid. Print a full table summary receipt?',
+        [
+          {
+            text: 'No',
+            style: 'cancel',
+            onPress: () => resolve(),
+          },
+          {
+            text: 'Preview',
+            onPress: async () => {
+              try {
+                await previewTableSummaryFromOrders(orders);
+              } finally {
+                resolve();
+              }
+            },
+          },
+          {
+            text: 'Print',
+            onPress: async () => {
+              try {
+                await printTableSummaryFromOrders(orders);
+              } finally {
+                resolve();
+              }
+            },
+          },
+        ]
+      );
+    });
+  };
+
+  const pickNextOrder = (orders: any[], currentDinerIdValue: string) => {
+    if (!orders || orders.length === 0) return null;
+
+    const sorted = [...orders].sort((a, b) => {
+      const aNum = Number(a.dinerId);
+      const bNum = Number(b.dinerId);
+      if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) {
+        return aNum - bNum;
+      }
+      return String(a.dinerId).localeCompare(String(b.dinerId));
+    });
+
+    const currentIndex = sorted.findIndex(o => String(o.dinerId) === String(currentDinerIdValue));
+    if (currentIndex >= 0 && currentIndex + 1 < sorted.length) {
+      return sorted[currentIndex + 1];
+    }
+
+    return sorted[0];
+  };
+
+  const handleMarkPaid = async () => {
+    if (!selectedTableNumber) {
+      Alert.alert('Error', 'No active table selected.');
+      return;
+    }
+
+    setIsMarkingPaid(true);
+    try {
+      // Always resolve the order to pay from latest active orders for current diner.
+      const latestActiveOrders = await refreshTableOrders();
+      trackDinerActivity(
+        selectedTableNumber,
+        latestActiveOrders.map((order: any) => order.dinerId)
+      );
+      const orderForCurrentDiner = latestActiveOrders.find(
+        (order: any) => String(order.dinerId) === String(selectedDinerId)
+      ) || (
+        currentOrder && String(currentOrder.dinerId) === String(selectedDinerId)
+          ? currentOrder
+          : null
+      );
+      const unpaidOtherOrdersBeforePay = latestActiveOrders.filter(
+        (order: any) => String(order.dinerId) !== String(selectedDinerId)
+      );
+
+      if (!orderForCurrentDiner?.id) {
+        Alert.alert('No Unpaid Order', 'There is no unpaid order for the current diner.');
+        return;
+      }
+
+      const paidOrder = await markPaidOrder(orderForCurrentDiner.id);
+      addPaidOrderSnapshot(selectedTableNumber, paidOrder);
+      trackDinerActivity(selectedTableNumber, [paidOrder?.dinerId, selectedDinerId]);
+
+      await askCurrentDinerReceipt();
+
+      let activeOrders = await refreshTableOrders();
+      trackDinerActivity(
+        selectedTableNumber,
+        activeOrders.map((order: any) => order.dinerId)
+      );
+
+      // Extra retry avoids edge cases where backend status propagation is briefly delayed.
+      if (activeOrders.length === 0) {
+        await new Promise(resolve => setTimeout(resolve, 280));
+        activeOrders = await refreshTableOrders();
+        trackDinerActivity(
+          selectedTableNumber,
+          activeOrders.map((order: any) => order.dinerId)
+        );
+      }
+
+      if (activeOrders.length > 0) {
+        const nextOrder = pickNextOrder(activeOrders, selectedDinerId);
+        if (nextOrder) {
+          dispatch(setDinerInfo({
+            dinerId: String(nextOrder.dinerId),
+            tabId: String(nextOrder.tabId),
+          }));
+          dispatch(setCurrentOrder(nextOrder));
+        }
+        return;
+      }
+
+      // Safety net: if there were clearly unpaid diners before pay, do not allow table checkout.
+      if (unpaidOtherOrdersBeforePay.length > 0) {
+        const fallbackNext = pickNextOrder(unpaidOtherOrdersBeforePay, selectedDinerId)
+          || unpaidOtherOrdersBeforePay[0];
+        if (fallbackNext) {
+          dispatch(setDinerInfo({
+            dinerId: String(fallbackNext.dinerId),
+            tabId: String(fallbackNext.tabId),
+          }));
+          dispatch(setCurrentOrder(fallbackNext));
+        }
+        Alert.alert(
+          'More Diners Pending',
+          'Other diners still have unpaid orders. Table checkout is not completed yet.'
+        );
+        return;
+      }
+
+      // If no unpaid backend orders remain, still guard against local unsent drafts
+      // for other diners to avoid releasing table too early.
+      const dinersWithLocalDrafts = new Set(
+        allDraftItems
+          .filter(item => String(item.dinerId) !== String(selectedDinerId))
+          .map(item => String(item.dinerId))
+      );
+
+      if (dinersWithLocalDrafts.size > 0) {
+        const nextDraftTab = dinerTabs.find(tab => dinersWithLocalDrafts.has(String(tab.dinerId)));
+        if (nextDraftTab) {
+          dispatch(setDinerInfo({
+            dinerId: String(nextDraftTab.dinerId),
+            tabId: String(nextDraftTab.tabId),
+          }));
+        }
+        Alert.alert(
+          'More Diners Pending',
+          'Other diners still have unsubmitted items. Table checkout is not completed yet.'
+        );
+        return;
+      }
+
+      const tablePaidOrders = getPaidOrdersForTable(selectedTableNumber);
+      const trackedDinerIds = getTrackedDinerActivity(selectedTableNumber);
+      const paidDinerIds = new Set(
+        tablePaidOrders
+          .map((order: any) => order?.dinerId)
+          .filter((id: any) => id !== undefined && id !== null)
+          .map((id: any) => String(id))
+      );
+
+      const unpaidTrackedDinerIds = trackedDinerIds.filter(id => !paidDinerIds.has(id));
+      if (unpaidTrackedDinerIds.length > 0) {
+        const targetDinerId = unpaidTrackedDinerIds[0];
+        const fallbackTab = dinerTabs.find(tab => String(tab.dinerId) === String(targetDinerId));
+        let fallbackOrder = activeOrders.find(
+          (order: any) => String(order.dinerId) === String(targetDinerId)
+        ) || unpaidOtherOrdersBeforePay.find(
+          (order: any) => String(order.dinerId) === String(targetDinerId)
+        ) || latestActiveOrders.find(
+          (order: any) => String(order.dinerId) === String(targetDinerId)
+        ) || tableOrders.find(
+          (order: any) => String(order.dinerId) === String(targetDinerId)
+        );
+
+        // One final refresh keeps tab and currentOrder in sync if cache is stale.
+        if (!fallbackOrder) {
+          try {
+            const refreshedOrders = await refreshTableOrders();
+            fallbackOrder = refreshedOrders.find(
+              (order: any) => String(order.dinerId) === String(targetDinerId)
+            );
+          } catch (error) {
+            console.warn('⚠️ Unable to refresh fallback diner order:', error);
+          }
+        }
+
+        if (fallbackTab) {
+          dispatch(setDinerInfo({
+            dinerId: String(fallbackTab.dinerId),
+            tabId: String(fallbackTab.tabId),
+          }));
+        }
+
+        if (fallbackOrder) {
+          dispatch(setCurrentOrder(fallbackOrder));
+        }
+
+        Alert.alert(
+          'More Diners Pending',
+          'Some diners still have unpaid orders. Table checkout is not completed yet.'
+        );
+        return;
+      }
+
+      if (tablePaidOrders.length > 1) {
+        await askTableSummaryReceipt(tablePaidOrders);
+      }
+
+      clearPaidOrdersForTable(selectedTableNumber);
+      clearTrackedDinerActivity(selectedTableNumber);
+      dispatch(completeDiningSession());
+      navigation.navigate('TableSelection');
+    } catch (error: any) {
+      console.error('❌ Mark paid failed:', error);
+      Alert.alert('Error', error.message || 'Failed to mark order as paid.');
+    } finally {
+      setIsMarkingPaid(false);
+    }
+  };
+
   const handleAddDinerTab = () => {
     Alert.prompt(
       'Add Diner',
@@ -266,7 +584,7 @@ export default function MenuScreen() {
     
     // Filter batches for current diner/tab and those with confirmed items
     const batchesWithConfirmed = currentOrder.batches.filter(batch => {
-      const isForCurrentDiner = batch.dinerId === selectedDinerId;
+      const isForCurrentDiner = String(batch.dinerId) === selectedDinerIdStr;
       const hasConfirmedItems = batch.items.some(item => item.status === 'CONFIRMED');
       console.log(`  Batch ${batch.batchId}: dinerId=${batch.dinerId}, isForCurrentDiner=${isForCurrentDiner}, hasConfirmedItems=${hasConfirmedItems}`);
       return isForCurrentDiner && hasConfirmedItems;
@@ -276,7 +594,7 @@ export default function MenuScreen() {
       batches: batchesWithConfirmed,
     });
     return batchesWithConfirmed;
-  }, [currentOrder, selectedDinerId]);
+  }, [currentOrder, selectedDinerIdStr]);
 
   // 跟踪所有已确认菜品总数（用于计算总金额）
   const confirmedItems = useMemo(() => {
@@ -289,11 +607,11 @@ export default function MenuScreen() {
     if (!currentOrder?.batches) return [];
     // Filter cancelled items for current diner only
     return currentOrder.batches
-      .filter(batch => batch.dinerId === selectedDinerId)
+      .filter(batch => String(batch.dinerId) === selectedDinerIdStr)
       .flatMap(batch =>
         batch.items.filter(item => item.status === 'CANCELLED')
       );
-  }, [currentOrder, selectedDinerId]);
+  }, [currentOrder, selectedDinerIdStr]);
 
   const totalConfirmedAmount = confirmedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const totalCancelledAmount = cancelledItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -645,35 +963,35 @@ export default function MenuScreen() {
         </View>
       )}
 
-      {/* Pay Order Button - Fixed at bottom */}
+      {/* Mark Paid Button - Fixed at bottom */}
       <TouchableOpacity
         style={[
           styles.payOrderButton,
           {
             backgroundColor: THEME.colors.accent,
             marginTop: THEME.spacing.md,
+            opacity: (isMarkingPaid || isMarkPaidSubmitting) ? 0.7 : 1,
           },
         ]}
+        disabled={isMarkingPaid || isMarkPaidSubmitting}
         onPress={() => {
           Alert.alert(
-            'Pay Order',
-            'Confirm payment for this order?',
+            'Mark Paid',
+            'Confirm this order has been paid offline?',
             [
               {
                 text: 'Cancel',
                 style: 'cancel',
               },
               {
-                text: 'Pay',
-                onPress: () => {
-                  showPrintDialog();
-                },
+                text: 'Mark Paid',
+                onPress: handleMarkPaid,
               },
             ]
           );
         }}
       >
-        <Text style={styles.payOrderButtonText}>💳 Pay Order</Text>
+        <Text style={styles.payOrderButtonText}>✅ Mark Paid</Text>
       </TouchableOpacity>
     </View>
     </View>

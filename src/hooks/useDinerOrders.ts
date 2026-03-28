@@ -20,6 +20,34 @@ export function useDinerOrders() {
   const [isLoading, setIsLoading] = useState(false);
   const lastTableNumberRef = useRef<string | undefined>(undefined);
 
+  const refreshTableOrders = useCallback(async () => {
+    if (!selectedTableNumber) {
+      setTableOrders([]);
+      return [];
+    }
+
+    setIsLoading(true);
+    try {
+      console.log('📦 Refreshing orders for table:', selectedTableNumber);
+      const response = await gqlQuery(GET_TABLE_STATUS, {
+        tableNumber: selectedTableNumber,
+      });
+
+      const tableStatus = (response as any).getTableStatus;
+      const activeOrders = tableStatus?.activeOrders || [];
+
+      setTableOrders(activeOrders);
+      dispatch(setError(null));
+      return activeOrders;
+    } catch (error) {
+      console.error('❌ Failed to refresh table orders:', error);
+      dispatch(setError(`Failed to load table orders: ${(error as any).message}`));
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedTableNumber, dispatch]);
+
   // 初始化日志（只运行一次）
   useEffect(() => {
     console.log('🎣 useDinerOrders hook initialized');
@@ -41,34 +69,22 @@ export function useDinerOrders() {
     lastTableNumberRef.current = selectedTableNumber;
 
     (async () => {
-      setIsLoading(true);
       try {
-        console.log('📦 Loading orders for table:', selectedTableNumber);
-        const response = await gqlQuery(GET_TABLE_STATUS, {
-          tableNumber: selectedTableNumber,
-        });
-
-        const tableStatus = (response as any).getTableStatus;
+        const activeOrders = await refreshTableOrders();
         console.log('📦 Table orders loaded:', {
           tableNumber: selectedTableNumber,
-          activeOrdersCount: tableStatus?.activeOrders?.length || 0,
-          orders: tableStatus?.activeOrders?.map((o: any) => ({
+          activeOrdersCount: activeOrders.length,
+          orders: activeOrders.map((o: any) => ({
             id: o.id,
             dinerId: o.dinerId,
             tabId: o.tabId,
           })),
         });
-
-        setTableOrders(tableStatus?.activeOrders || []);
-        dispatch(setError(null));
       } catch (error) {
         console.error('❌ Failed to load table orders:', error);
-        dispatch(setError(`Failed to load table orders: ${(error as any).message}`));
-      } finally {
-        setIsLoading(false);
       }
     })();
-  }, [selectedTableNumber, dispatch]);
+  }, [selectedTableNumber, refreshTableOrders]);
 
   // Effect 1.5: 当 currentOrder 改变时，刷新 tableOrders（确保缓存最新）
   useEffect(() => {
@@ -80,6 +96,10 @@ export function useDinerOrders() {
     
     // 刷新 tableOrders：添加新的 order 或更新现有的
     setTableOrders(prevOrders => {
+      if (currentOrder.status === 'PAID') {
+        return prevOrders.filter(o => o.id !== currentOrder.id);
+      }
+
       const existingIndex = prevOrders.findIndex(o => o.id === currentOrder.id);
       if (existingIndex >= 0) {
         // 更新现有订单
@@ -129,5 +149,5 @@ export function useDinerOrders() {
     dispatch(setCurrentOrder(dinerOrder));
   }, [selectedDinerId, tableOrders, currentOrder?.id, dispatch]);
 
-  return { isLoading, tableOrders };
+  return { isLoading, tableOrders, refreshTableOrders };
 }

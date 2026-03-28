@@ -20,6 +20,20 @@ const fetchRestaurantInfo = async (): Promise<{
   };
 };
 
+type ReceiptOrderLike = {
+  id?: string;
+  dinerId?: string;
+  batches?: Array<{
+    dinerId?: string;
+    items?: Array<{
+      name: string;
+      quantity: number;
+      price: number;
+      status: string;
+    }>;
+  }>;
+};
+
 export const usePrintReceipt = () => {
   const currentOrder = useSelector((state: RootState) => state.order.currentOrder);
   const selectedTableNumber = useSelector((state: RootState) => state.order.selectedTableNumber);
@@ -140,6 +154,107 @@ export const usePrintReceipt = () => {
     }
   }, [buildReceiptHTML]);
 
+  const buildTableSummaryHTMLFromOrders = useCallback(async (orders: ReceiptOrderLike[]) => {
+    if (!orders || orders.length === 0) {
+      Alert.alert('No Orders', 'No paid orders to print for this table.');
+      return null;
+    }
+
+    const allItems = orders.flatMap(order =>
+      (order.batches || []).flatMap(batch =>
+        (batch.items || []).filter(item => item.status === 'CONFIRMED')
+      )
+    );
+
+    if (allItems.length === 0) {
+      Alert.alert('No Items', 'No confirmed items to print.');
+      return null;
+    }
+
+    const restaurant = await fetchRestaurantInfo();
+
+    const mergedDishes: { [key: string]: { name: string; quantity: number; price: number } } = {};
+    allItems.forEach(item => {
+      if (mergedDishes[item.name]) {
+        mergedDishes[item.name].quantity += item.quantity;
+      } else {
+        mergedDishes[item.name] = {
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+        };
+      }
+    });
+
+    const dishes = Object.values(mergedDishes);
+    const subtotal = dishes.reduce((sum, d) => sum + d.price * d.quantity, 0);
+    const tax = Math.round(subtotal * 0.1);
+    const total = subtotal + tax;
+
+    const uniqueDiners = new Set(
+      orders
+        .map(order => String(order.dinerId ?? '0'))
+        .filter(Boolean)
+    );
+
+    const receiptData: ReceiptData = {
+      restaurant,
+      tableNumber: Number(selectedTableNumber) || 0,
+      diners: uniqueDiners.size || 1,
+      dishes,
+      subtotal,
+      tax,
+      total,
+      orderId: undefined,
+      printTime: new Date().toLocaleString('en-AU', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }),
+    };
+
+    return generateReceiptHTML(receiptData);
+  }, [selectedTableNumber]);
+
+  const printTableSummaryFromOrders = useCallback(async (orders: ReceiptOrderLike[]) => {
+    try {
+      const html = await buildTableSummaryHTMLFromOrders(orders);
+      if (!html) return;
+
+      if (Platform.OS === 'ios') {
+        if (!PrintModule?.printHTML) {
+          Alert.alert('Print Error', 'Print module is not available. Please restart the app.');
+          return;
+        }
+        await PrintModule.printHTML(html);
+      } else {
+        Alert.alert('Not Supported', 'Printing is currently only supported on iOS.');
+      }
+    } catch (error: any) {
+      console.error('❌ Table summary print failed:', error);
+      Alert.alert('Print Error', error.message || 'Failed to print table summary receipt.');
+    }
+  }, [buildTableSummaryHTMLFromOrders]);
+
+  const previewTableSummaryFromOrders = useCallback(async (orders: ReceiptOrderLike[]) => {
+    try {
+      const html = await buildTableSummaryHTMLFromOrders(orders);
+      if (!html) return;
+
+      if (Platform.OS === 'ios') {
+        if (!PrintModule?.previewHTML) {
+          Alert.alert('Preview Error', 'Preview module is not available. Please restart the app.');
+          return;
+        }
+        await PrintModule.previewHTML(html);
+      } else {
+        Alert.alert('Not Supported', 'Preview is currently only supported on iOS.');
+      }
+    } catch (error: any) {
+      console.error('❌ Table summary preview failed:', error);
+      Alert.alert('Preview Error', error.message || 'Failed to preview table summary receipt.');
+    }
+  }, [buildTableSummaryHTMLFromOrders]);
+
   const showPrintDialog = useCallback(() => {
     Alert.alert(
       'Print Receipt',
@@ -161,5 +276,11 @@ export const usePrintReceipt = () => {
     );
   }, [printReceipt, previewReceipt]);
 
-  return { printReceipt, previewReceipt, showPrintDialog };
+  return {
+    printReceipt,
+    previewReceipt,
+    showPrintDialog,
+    printTableSummaryFromOrders,
+    previewTableSummaryFromOrders,
+  };
 };
