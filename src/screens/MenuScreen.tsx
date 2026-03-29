@@ -175,6 +175,8 @@ export default function MenuScreen() {
   }, [selectedDishes, draftItems]);
 
   const handleAddDish = (dish: Dish) => {
+    if (guardPaidDinerEditAction()) return;
+
     dispatch(
       addDraftItem({
         dishId: dish.id,
@@ -187,6 +189,8 @@ export default function MenuScreen() {
   };
 
   const handleUpdateQuantity = (dishId: string, quantity: number) => {
+    if (guardPaidDinerEditAction()) return;
+
     if (quantity === 0) {
       dispatch(removeDraftItem({ dishId, dinerId: selectedDinerId }));
     } else {
@@ -206,6 +210,93 @@ export default function MenuScreen() {
 
   const clearPaidOrdersForTable = (tableNumber: string) => {
     delete paidOrdersByTableRef.current[tableNumber];
+  };
+
+  const getPaidOrderForDiner = (tableNumber: string, dinerId: string) => {
+    return getPaidOrdersForTable(tableNumber).find(
+      (order: any) => String(order?.dinerId) === String(dinerId)
+    );
+  };
+
+  const hasActiveOrderForDiner = (dinerId: string) => {
+    return tableOrders.some((order: any) => String(order.dinerId) === String(dinerId));
+  };
+
+  const findFirstUnpaidTab = () => {
+    const pendingDinerIds = new Set(
+      tableOrders.map((order: any) => String(order.dinerId))
+    );
+
+    return dinerTabs.find(tab => pendingDinerIds.has(String(tab.dinerId)));
+  };
+
+  const switchToFirstUnpaidDiner = () => {
+    const nextTab = findFirstUnpaidTab();
+    if (!nextTab) {
+      return;
+    }
+
+    dispatch(setDinerInfo({
+      dinerId: String(nextTab.dinerId),
+      tabId: String(nextTab.tabId),
+    }));
+
+    const nextOrder = tableOrders.find(
+      (order: any) => String(order.dinerId) === String(nextTab.dinerId)
+    );
+
+    if (nextOrder) {
+      dispatch(setCurrentOrder(nextOrder));
+    }
+  };
+
+  const isSelectedDinerPaid = useMemo(() => {
+    if (!selectedTableNumber) return false;
+
+    // Active backend orders are the source of truth for unpaid diners.
+    if (hasActiveOrderForDiner(selectedDinerIdStr)) {
+      return false;
+    }
+
+    const hasPaidSnapshot = !!getPaidOrderForDiner(selectedTableNumber, selectedDinerIdStr);
+    return hasPaidSnapshot;
+  }, [selectedTableNumber, selectedDinerIdStr, tableOrders]);
+
+  const guardPaidDinerEditAction = () => {
+    if (!isSelectedDinerPaid) {
+      return false;
+    }
+
+    Alert.alert(
+      'Diner Already Paid',
+      'This diner is already paid. Switch to an unpaid diner to continue.',
+      [
+        {
+          text: 'Stay',
+          style: 'cancel',
+        },
+        {
+          text: 'Switch',
+          onPress: () => switchToFirstUnpaidDiner(),
+        },
+      ]
+    );
+
+    return true;
+  };
+
+  const getTabStatusLabel = (tab: DinerTab) => {
+    if (!selectedTableNumber) return '';
+
+    const tabDinerId = String(tab.dinerId);
+    const tabIsPending = hasActiveOrderForDiner(tabDinerId);
+
+    if (tabIsPending) return 'Pending';
+
+    const tabIsPaid = !!getPaidOrderForDiner(selectedTableNumber, tabDinerId);
+
+    if (tabIsPaid) return 'Paid';
+    return '';
   };
 
   const trackDinerActivity = (tableNumber: string, dinerIds: Array<string | number | undefined>) => {
@@ -236,36 +327,28 @@ export default function MenuScreen() {
     trackDinerActivity(selectedTableNumber, [currentOrder.dinerId]);
   }, [selectedTableNumber, currentOrder?.dinerId]);
 
-  const askCurrentDinerReceipt = () => {
-    return new Promise<void>((resolve) => {
+  const askMarkPaidAction = () => {
+    return new Promise<'cancel' | 'paid-only' | 'preview-then-paid' | 'print-then-paid'>((resolve) => {
       Alert.alert(
-        'Diner Receipt',
-        'Print receipt for this diner?',
+        'Mark Paid',
+        'Choose what to do before marking this diner as paid.',
         [
           {
-            text: 'No',
+            text: 'Cancel',
             style: 'cancel',
-            onPress: () => resolve(),
+            onPress: () => resolve('cancel'),
           },
           {
-            text: 'Preview',
-            onPress: async () => {
-              try {
-                await previewReceipt(false);
-              } finally {
-                resolve();
-              }
-            },
+            text: 'Mark Paid Only',
+            onPress: () => resolve('paid-only'),
           },
           {
-            text: 'Print',
-            onPress: async () => {
-              try {
-                await printReceipt(false);
-              } finally {
-                resolve();
-              }
-            },
+            text: 'Preview Then Mark Paid',
+            onPress: () => resolve('preview-then-paid'),
+          },
+          {
+            text: 'Print Then Mark Paid',
+            onPress: () => resolve('print-then-paid'),
           },
         ]
       );
@@ -358,11 +441,21 @@ export default function MenuScreen() {
         return;
       }
 
+      const markPaidAction = await askMarkPaidAction();
+      if (markPaidAction === 'cancel') {
+        return;
+      }
+
+      if (markPaidAction === 'preview-then-paid') {
+        await previewReceipt(false);
+      } else if (markPaidAction === 'print-then-paid') {
+        await printReceipt(false);
+      }
+
       const paidOrder = await markPaidOrder(orderForCurrentDiner.id);
       addPaidOrderSnapshot(selectedTableNumber, paidOrder);
       trackDinerActivity(selectedTableNumber, [paidOrder?.dinerId, selectedDinerId]);
-
-      await askCurrentDinerReceipt();
+      const shouldShowPendingAlert = markPaidAction === 'paid-only';
 
       let activeOrders = await refreshTableOrders();
       trackDinerActivity(
@@ -403,10 +496,12 @@ export default function MenuScreen() {
           }));
           dispatch(setCurrentOrder(fallbackNext));
         }
-        Alert.alert(
-          'More Diners Pending',
-          'Other diners still have unpaid orders. Table checkout is not completed yet.'
-        );
+        if (shouldShowPendingAlert) {
+          Alert.alert(
+            'More Diners Pending',
+            'Other diners still have unpaid orders. Table checkout is not completed yet.'
+          );
+        }
         return;
       }
 
@@ -426,10 +521,12 @@ export default function MenuScreen() {
             tabId: String(nextDraftTab.tabId),
           }));
         }
-        Alert.alert(
-          'More Diners Pending',
-          'Other diners still have unsubmitted items. Table checkout is not completed yet.'
-        );
+        if (shouldShowPendingAlert) {
+          Alert.alert(
+            'More Diners Pending',
+            'Other diners still have unsubmitted items. Table checkout is not completed yet.'
+          );
+        }
         return;
       }
 
@@ -479,10 +576,12 @@ export default function MenuScreen() {
           dispatch(setCurrentOrder(fallbackOrder));
         }
 
-        Alert.alert(
-          'More Diners Pending',
-          'Some diners still have unpaid orders. Table checkout is not completed yet.'
-        );
+        if (shouldShowPendingAlert) {
+          Alert.alert(
+            'More Diners Pending',
+            'Some diners still have unpaid orders. Table checkout is not completed yet.'
+          );
+        }
         return;
       }
 
@@ -528,6 +627,8 @@ export default function MenuScreen() {
 
   // 处理取消已确认菜品
   const handleCancelConfirmedItem = (item: any) => {
+    if (guardPaidDinerEditAction()) return;
+
     Alert.alert(
       'Reduce Item',
       `Cancel 1x ${item.name}?`,
@@ -631,6 +732,7 @@ export default function MenuScreen() {
       onAddDish={() => handleAddDish(item)}
       onUpdateQuantity={(qty) => handleUpdateQuantity(item.id, qty)}
       itemWidth={itemWidth}
+      disabled={isSelectedDinerPaid}
     />
   );
 
@@ -721,30 +823,33 @@ export default function MenuScreen() {
         style={[styles.dinerTabsScroll, { borderBottomColor: THEME.colors.borderColor }]}
         contentContainerStyle={styles.dinerTabsContainer}
       >
-        {dinerTabs.map((tab) => (
-          <TouchableOpacity
-            key={tab.tabId}
-            style={[
-              styles.dinerTab,
-              {
-                borderBottomColor: selectedTabId === tab.tabId ? THEME.colors.accent : 'transparent',
-                borderBottomWidth: selectedTabId === tab.tabId ? 3 : 0,
-              },
-            ]}
-            onPress={() => dispatch(setDinerInfo({ dinerId: tab.dinerId, tabId: tab.tabId }))}
-          >
-            <Text
+        {dinerTabs.map((tab) => {
+          const statusLabel = getTabStatusLabel(tab);
+          return (
+            <TouchableOpacity
+              key={tab.tabId}
               style={[
-                styles.dinerTabText,
+                styles.dinerTab,
                 {
-                  color: selectedTabId === tab.tabId ? THEME.colors.accent : THEME.colors.textSecondary,
+                  borderBottomColor: selectedTabId === tab.tabId ? THEME.colors.accent : 'transparent',
+                  borderBottomWidth: selectedTabId === tab.tabId ? 3 : 0,
                 },
               ]}
+              onPress={() => dispatch(setDinerInfo({ dinerId: tab.dinerId, tabId: tab.tabId }))}
             >
-              {tab.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <Text
+                style={[
+                  styles.dinerTabText,
+                  {
+                    color: selectedTabId === tab.tabId ? THEME.colors.accent : THEME.colors.textSecondary,
+                  },
+                ]}
+              >
+                {statusLabel ? `${tab.name} · ${statusLabel}` : tab.name}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
         <TouchableOpacity
           style={[styles.addDinerButton, { borderColor: THEME.colors.accent }]}
           onPress={handleAddDinerTab}
@@ -755,6 +860,20 @@ export default function MenuScreen() {
 
       {/* Content Container - Flex layout for scrollable items + fixed buttons */}
       <View style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {isSelectedDinerPaid && (
+          <View style={[styles.lockedNotice, { backgroundColor: '#2a2a2a', borderColor: THEME.colors.borderColor }]}>
+            <Text style={[styles.lockedNoticeText, { color: THEME.colors.textSecondary }]}>
+              This diner is already paid. Switch to an unpaid diner to continue.
+            </Text>
+            <TouchableOpacity
+              style={[styles.lockedNoticeAction, { borderColor: THEME.colors.accent }]}
+              onPress={switchToFirstUnpaidDiner}
+            >
+              <Text style={[styles.lockedNoticeActionText, { color: THEME.colors.accent }]}>Switch to Unpaid Diner</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Cart Items */}
         <ScrollView style={[styles.cartItems, { flex: 1 }]}>
         {/* Sent to Kitchen Section - Grouped by Batch */}
@@ -767,8 +886,9 @@ export default function MenuScreen() {
               <TouchableOpacity
                 style={[
                   styles.editButton,
-                  { backgroundColor: THEME.colors.accent }
+                  { backgroundColor: THEME.colors.accent, opacity: isSelectedDinerPaid ? 0.45 : 1 }
                 ]}
+                disabled={isSelectedDinerPaid}
                 onPress={() => setEditMode(!editMode)}
               >
                 <Text style={styles.editButtonText}>
@@ -818,7 +938,8 @@ export default function MenuScreen() {
                           </View>
                           {editMode && (
                             <TouchableOpacity
-                              style={styles.cancelButton}
+                              style={[styles.cancelButton, { opacity: isSelectedDinerPaid ? 0.45 : 1 }]}
+                              disabled={isSelectedDinerPaid}
                               onPress={() => handleCancelConfirmedItem(item)}
                             >
                               <Text style={styles.cancelButtonText}>−</Text>
@@ -954,8 +1075,12 @@ export default function MenuScreen() {
           </View>
           {totalDraftItems > 0 && (
             <TouchableOpacity
-              style={[styles.reviewButton, { backgroundColor: THEME.colors.accent, marginTop: THEME.spacing.md }]}
-              onPress={() => setShowOrderReviewModal(true)}
+              style={[styles.reviewButton, { backgroundColor: THEME.colors.accent, marginTop: THEME.spacing.md, opacity: isSelectedDinerPaid ? 0.45 : 1 }]}
+              disabled={isSelectedDinerPaid}
+              onPress={() => {
+                if (guardPaidDinerEditAction()) return;
+                setShowOrderReviewModal(true);
+              }}
             >
               <Text style={styles.reviewButtonText}>Send to Kitchen</Text>
             </TouchableOpacity>
@@ -970,11 +1095,13 @@ export default function MenuScreen() {
           {
             backgroundColor: THEME.colors.accent,
             marginTop: THEME.spacing.md,
-            opacity: (isMarkingPaid || isMarkPaidSubmitting) ? 0.7 : 1,
+            opacity: (isMarkingPaid || isMarkPaidSubmitting || isSelectedDinerPaid) ? 0.45 : 1,
           },
         ]}
-        disabled={isMarkingPaid || isMarkPaidSubmitting}
+        disabled={isMarkingPaid || isMarkPaidSubmitting || isSelectedDinerPaid}
         onPress={() => {
+          if (guardPaidDinerEditAction()) return;
+
           Alert.alert(
             'Mark Paid',
             'Confirm this order has been paid offline?',
@@ -1255,6 +1382,30 @@ const styles = StyleSheet.create({
   },
   addDinerButtonText: {
     fontSize: THEME.typography.sizes.xl,
+    fontWeight: '700',
+  },
+  lockedNotice: {
+    borderWidth: 1,
+    borderRadius: THEME.borderRadius.md,
+    marginHorizontal: THEME.spacing.md,
+    marginTop: THEME.spacing.md,
+    paddingHorizontal: THEME.spacing.md,
+    paddingVertical: THEME.spacing.md,
+    gap: THEME.spacing.sm,
+  },
+  lockedNoticeText: {
+    fontSize: THEME.typography.sizes.sm,
+    lineHeight: 18,
+  },
+  lockedNoticeAction: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: THEME.borderRadius.sm,
+    paddingHorizontal: THEME.spacing.md,
+    paddingVertical: THEME.spacing.xs,
+  },
+  lockedNoticeActionText: {
+    fontSize: THEME.typography.sizes.xs,
     fontWeight: '700',
   },
   cartItems: {

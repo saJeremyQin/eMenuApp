@@ -20,6 +20,7 @@ interface DishCardProps {
   onAddDish: () => void;
   onUpdateQuantity: (quantity: number) => void;
   itemWidth: number;
+  disabled?: boolean;
 }
 
 export default function DishCard({
@@ -31,19 +32,22 @@ export default function DishCard({
   onAddDish,
   onUpdateQuantity,
   itemWidth,
+  disabled = false,
 }: DishCardProps) {
   return (
     <TouchableOpacity
-      activeOpacity={0.7}
+      activeOpacity={disabled ? 1 : 0.7}
       style={[
         styles.card,
         {
           width: itemWidth,
           backgroundColor: THEME.colors.cardBg,
           borderColor: THEME.colors.borderColor,
+          opacity: disabled ? 0.5 : 1,
         },
       ]}
-      onPress={() => quantity === 0 && onAddDish()}
+      disabled={disabled}
+      onPress={() => !disabled && quantity === 0 && onAddDish()}
     >
       {/* Image Container */}
       <View style={[styles.imageContainer, { height: itemWidth * 0.65 }]}>
@@ -98,6 +102,7 @@ export default function DishCard({
             >
               <TouchableOpacity
                 style={styles.quantityBtn}
+                disabled={disabled}
                 onPress={() => onUpdateQuantity(quantity - 1)}
               >
                 <Text style={[styles.quantitySymbol, { color: THEME.colors.accent }]}>
@@ -114,6 +119,7 @@ export default function DishCard({
               </Text>
               <TouchableOpacity
                 style={styles.quantityBtn}
+                disabled={disabled}
                 onPress={() => onUpdateQuantity(quantity + 1)}
               >
                 <Text style={[styles.quantitySymbol, { color: THEME.colors.accent }]}>
@@ -124,6 +130,7 @@ export default function DishCard({
           ) : (
             <TouchableOpacity
               style={[styles.addBtn, { backgroundColor: THEME.colors.accent }]}
+              disabled={disabled}
               onPress={onAddDish}
             >
               <Text style={styles.addBtnText}>+</Text>
