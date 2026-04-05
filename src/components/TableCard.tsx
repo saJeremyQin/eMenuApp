@@ -13,7 +13,8 @@ interface TableCardProps {
   backgroundColor: string;
   accentColor: string;
   onPress: (tableNumber: string) => void;
-  totalAmount?: number; // 可选：当前桌的菜品总金额（单位：分）
+  totalAmount?: number; // 可选：当前桌进行中订单总金额（单位：分，含税）
+  hasActiveOrder?: boolean; // 是否存在进行中的订单（即使金额为 0 也显示）
 }
 
 export default function TableCard({
@@ -23,9 +24,10 @@ export default function TableCard({
   accentColor,
   onPress,
   totalAmount = 0,
+  hasActiveOrder = false,
 }: TableCardProps) {
-  const hasOrder = totalAmount && totalAmount > 0;
-  const totalEuro = (totalAmount / 100).toFixed(2);
+  const showInProgressAmount = hasActiveOrder || totalAmount > 0;
+  const totalDollar = (totalAmount / 100).toFixed(2);
 
   return (
     <TouchableOpacity
@@ -38,19 +40,22 @@ export default function TableCard({
       ]}
       onPress={() => onPress(tableNumber)}
     >
+      {showInProgressAmount && (
+        <View style={styles.inProgressBadge}>
+          <View style={styles.flagIcon}>
+            <View style={styles.flagPole} />
+            <View style={styles.flagCloth} />
+          </View>
+          <Text style={styles.totalAmount}>
+            ${totalDollar}
+          </Text>
+        </View>
+      )}
+
       <Text style={styles.tableIcon}>🍽️</Text>
       <Text style={[styles.tableNumber, { color: accentColor }]}>
         Table {tableNumber}
       </Text>
-      
-      {/* 显示总金额（如果有点单） */}
-      {hasOrder && (
-        <View style={styles.totalContainer}>
-          <Text style={[styles.totalAmount, { color: accentColor }]}>
-            €{totalEuro}
-          </Text>
-        </View>
-      )}
     </TouchableOpacity>
   );
 }
@@ -65,6 +70,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: THEME.spacing.md,
+    position: 'relative',
   },
   tableIcon: {
     fontSize: 48,
@@ -73,16 +79,51 @@ const styles = StyleSheet.create({
     fontSize: THEME.typography.sizes.base,
     fontWeight: '600',
   },
-  totalContainer: {
-    marginTop: THEME.spacing.sm,
-    paddingTop: THEME.spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.2)',
-    width: '100%',
+  inProgressBadge: {
+    position: 'absolute',
+    top: THEME.spacing.md,
+    left: THEME.spacing.md,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: THEME.spacing.xs,
+    paddingHorizontal: THEME.spacing.md,
+    paddingVertical: THEME.spacing.sm,
+    borderRadius: 999,
+    backgroundColor: 'rgba(229, 57, 53, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(229, 57, 53, 0.35)',
+  },
+  flagIcon: {
+    width: 18,
+    height: 18,
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  flagPole: {
+    position: 'absolute',
+    left: 1,
+    top: 1,
+    width: 2.5,
+    height: 16,
+    borderRadius: 1,
+    backgroundColor: '#F6C1BF',
+  },
+  flagCloth: {
+    position: 'absolute',
+    left: 4,
+    top: 1,
+    width: 0,
+    height: 0,
+    borderTopWidth: 5,
+    borderBottomWidth: 5,
+    borderLeftWidth: 10,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderLeftColor: '#E53935',
   },
   totalAmount: {
-    fontSize: THEME.typography.sizes.sm,
+    fontSize: THEME.typography.sizes.base,
     fontWeight: '700',
+    color: '#FFD7D6',
   },
 });
