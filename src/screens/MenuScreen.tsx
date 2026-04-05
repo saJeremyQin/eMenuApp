@@ -327,34 +327,6 @@ export default function MenuScreen() {
     trackDinerActivity(selectedTableNumber, [currentOrder.dinerId]);
   }, [selectedTableNumber, currentOrder?.dinerId]);
 
-  const askMarkPaidAction = () => {
-    return new Promise<'cancel' | 'paid-only' | 'preview-then-paid' | 'print-then-paid'>((resolve) => {
-      Alert.alert(
-        'Mark Paid',
-        'Choose what to do before marking this diner as paid.',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-            onPress: () => resolve('cancel'),
-          },
-          {
-            text: 'Mark Paid Only',
-            onPress: () => resolve('paid-only'),
-          },
-          {
-            text: 'Preview Then Mark Paid',
-            onPress: () => resolve('preview-then-paid'),
-          },
-          {
-            text: 'Print Then Mark Paid',
-            onPress: () => resolve('print-then-paid'),
-          },
-        ]
-      );
-    });
-  };
-
   const askTableSummaryReceipt = (orders: any[]) => {
     return new Promise<void>((resolve) => {
       Alert.alert(
@@ -441,21 +413,10 @@ export default function MenuScreen() {
         return;
       }
 
-      const markPaidAction = await askMarkPaidAction();
-      if (markPaidAction === 'cancel') {
-        return;
-      }
-
-      if (markPaidAction === 'preview-then-paid') {
-        await previewReceipt(false);
-      } else if (markPaidAction === 'print-then-paid') {
-        await printReceipt(false);
-      }
-
       const paidOrder = await markPaidOrder(orderForCurrentDiner.id);
       addPaidOrderSnapshot(selectedTableNumber, paidOrder);
       trackDinerActivity(selectedTableNumber, [paidOrder?.dinerId, selectedDinerId]);
-      const shouldShowPendingAlert = markPaidAction === 'paid-only';
+      const shouldShowPendingAlert = true;
 
       let activeOrders = await refreshTableOrders();
       trackDinerActivity(
@@ -1088,38 +1049,76 @@ export default function MenuScreen() {
         </View>
       )}
 
-      {/* Mark Paid Button - Fixed at bottom */}
-      <TouchableOpacity
-        style={[
-          styles.payOrderButton,
-          {
-            backgroundColor: THEME.colors.accent,
-            marginTop: THEME.spacing.md,
-            opacity: (isMarkingPaid || isMarkPaidSubmitting || isSelectedDinerPaid) ? 0.45 : 1,
-          },
-        ]}
-        disabled={isMarkingPaid || isMarkPaidSubmitting || isSelectedDinerPaid}
-        onPress={() => {
-          if (guardPaidDinerEditAction()) return;
+      {/* Bottom actions */}
+      <View style={styles.bottomActionRow}>
+        <TouchableOpacity
+          style={[
+            styles.bottomActionButton,
+            {
+              backgroundColor: THEME.colors.cardBg,
+              borderColor: THEME.colors.accent,
+              borderWidth: 1,
+              opacity: (isMarkingPaid || isMarkPaidSubmitting || isSelectedDinerPaid) ? 0.45 : 1,
+            },
+          ]}
+          disabled={isMarkingPaid || isMarkPaidSubmitting || isSelectedDinerPaid}
+          onPress={() => {
+            if (guardPaidDinerEditAction()) return;
 
-          Alert.alert(
-            'Mark Paid',
-            'Confirm this order has been paid offline?',
-            [
-              {
-                text: 'Cancel',
-                style: 'cancel',
-              },
-              {
-                text: 'Mark Paid',
-                onPress: handleMarkPaid,
-              },
-            ]
-          );
-        }}
-      >
-        <Text style={styles.payOrderButtonText}>✅ Mark Paid</Text>
-      </TouchableOpacity>
+            Alert.alert(
+              'Print Receipt',
+              'Choose receipt action for this diner.',
+              [
+                {
+                  text: 'Cancel',
+                  style: 'cancel',
+                },
+                {
+                  text: 'Preview',
+                  onPress: () => setTimeout(() => previewReceipt(false), 120),
+                },
+                {
+                  text: 'Print',
+                  onPress: () => setTimeout(() => printReceipt(false), 120),
+                },
+              ]
+            );
+          }}
+        >
+          <Text style={[styles.bottomActionButtonText, { color: THEME.colors.accent }]}>🧾 Print Receipt</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.bottomActionButton,
+            {
+              backgroundColor: THEME.colors.accent,
+              opacity: (isMarkingPaid || isMarkPaidSubmitting || isSelectedDinerPaid) ? 0.45 : 1,
+            },
+          ]}
+          disabled={isMarkingPaid || isMarkPaidSubmitting || isSelectedDinerPaid}
+          onPress={() => {
+            if (guardPaidDinerEditAction()) return;
+
+            Alert.alert(
+              'Mark Paid',
+              'Confirm this order has been paid offline?',
+              [
+                {
+                  text: 'Cancel',
+                  style: 'cancel',
+                },
+                {
+                  text: 'Mark Paid',
+                  onPress: handleMarkPaid,
+                },
+              ]
+            );
+          }}
+        >
+          <Text style={styles.bottomActionButtonText}>✅ Mark Paid</Text>
+        </TouchableOpacity>
+      </View>
     </View>
     </View>
   );
@@ -1546,16 +1545,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
   },
-  payOrderButton: {
-    paddingVertical: THEME.spacing.lg,
-    paddingHorizontal: THEME.spacing.md,
+  bottomActionRow: {
+    flexDirection: 'row',
+    gap: THEME.spacing.md,
+    marginTop: THEME.spacing.md,
     marginHorizontal: THEME.spacing.md,
     marginBottom: THEME.spacing.md,
+  },
+  bottomActionButton: {
+    paddingVertical: THEME.spacing.lg,
+    paddingHorizontal: THEME.spacing.md,
     borderRadius: THEME.borderRadius.md,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  payOrderButtonText: {
+  bottomActionButtonText: {
     color: THEME.colors.textPrimary,
     fontSize: THEME.typography.sizes.base,
     fontWeight: '700',
