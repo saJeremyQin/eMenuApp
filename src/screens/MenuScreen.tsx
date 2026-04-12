@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation } from '@react-navigation/native';
 import { RootState, AppDispatch } from '../store/store';
-import { addDraftItem, updateDraftItemQuantity, removeDraftItem, addDinerTab, setDinerInfo, setCurrentOrder, completeDiningSession, DinerTab } from '../store/orderSlice';
+import { addDraftItem, updateDraftItemQuantity, removeDraftItem, addDinerTab, setDinerInfo, setCurrentOrder, completeDiningSession, clearDinerOrderIdsForTable, setDinerOrderId, setDinerCheckoutState, DinerTab } from '../store/orderSlice';
 import { useCancelOrderItem, usePayOrder } from '../hooks/useOrder';
 import { useDinerOrders } from '../hooks/useDinerOrders';
 import { usePrintReceipt } from '../hooks/usePrintReceipt';
@@ -55,6 +55,14 @@ export default function MenuScreen() {
   const dinerTabs = useMemo(() => {
     return selectedTableNumber ? allDinerTabs.filter(tab => tab.tableNumber === selectedTableNumber) : [];
   }, [allDinerTabs, selectedTableNumber]);
+
+  const currentDinerTab = useMemo(() => {
+    return dinerTabs.find(tab => String(tab.dinerId) === selectedDinerIdStr);
+  }, [dinerTabs, selectedDinerIdStr]);
+
+  const canMarkPaid = useMemo(() => {
+    return currentDinerTab?.checkoutState === 'payable' && !!currentDinerTab?.orderId;
+  }, [currentDinerTab]);
 
   // Verify selectedDinerId belongs to current table, reset if not
   useEffect(() => {
@@ -246,6 +254,16 @@ export default function MenuScreen() {
     );
 
     if (nextOrder) {
+      dispatch(setDinerOrderId({
+        dinerId: String(nextOrder.dinerId),
+        orderId: String(nextOrder.id),
+        tableNumber: String(selectedTableNumber),
+      }));
+      dispatch(setDinerCheckoutState({
+        dinerId: String(nextOrder.dinerId),
+        checkoutState: 'payable',
+        tableNumber: String(selectedTableNumber),
+      }));
       dispatch(setCurrentOrder(nextOrder));
     }
   };
@@ -287,6 +305,8 @@ export default function MenuScreen() {
 
   const getTabStatusLabel = (tab: DinerTab) => {
     if (!selectedTableNumber) return '';
+
+    if (tab.checkoutState === 'sending') return 'Sending';
 
     const tabDinerId = String(tab.dinerId);
     const tabIsPending = hasActiveOrderForDiner(tabDinerId);
@@ -389,31 +409,84 @@ export default function MenuScreen() {
       return;
     }
 
+    if (!canMarkPaid) {
+      Alert.alert('Not Ready', 'Send to kitchen successfully before marking this diner as paid.');
+      return;
+    }
+
     setIsMarkingPaid(true);
     try {
-      // Always resolve the order to pay from latest active orders for current diner.
-      const latestActiveOrders = await refreshTableOrders();
-      trackDinerActivity(
-        selectedTableNumber,
-        latestActiveOrders.map((order: any) => order.dinerId)
-      );
-      const orderForCurrentDiner = latestActiveOrders.find(
-        (order: any) => String(order.dinerId) === String(selectedDinerId)
-      ) || (
-        currentOrder && String(currentOrder.dinerId) === String(selectedDinerId)
-          ? currentOrder
-          : null
-      );
+      // Primary path: use the diner-scoped order id captured at send-to-kitchen time.
+      let orderIdToPay = currentDinerTab?.orderId;
+
+      let latestActiveOrders: any[] = [];
+      let orderForCurrentDiner: any = null;
+
+      // Fallback path is used only when diner-order mapping is unexpectedly missing.
+      if (!orderIdToPay) {
+        latestActiveOrders = await refreshTableOrders();
+        trackDinerActivity(
+          selectedTableNumber,
+          latestActiveOrders.map((order: any) => order.dinerId)
+        );
+
+        orderForCurrentDiner = latestActiveOrders.find(
+          (order: any) => String(order.dinerId) === String(selectedDinerId)
+        );
+
+        if (!orderIdToPay && orderForCurrentDiner?.id) {
+          orderIdToPay = String(orderForCurrentDiner.id);
+        }
+
+        // Keep one retry for legacy path only.
+        if (!orderForCurrentDiner) {
+          await new Promise(resolve => setTimeout(resolve, 220));
+          const retriedActiveOrders = await refreshTableOrders();
+          trackDinerActivity(
+            selectedTableNumber,
+            retriedActiveOrders.map((order: any) => order.dinerId)
+          );
+          orderForCurrentDiner = retriedActiveOrders.find(
+            (order: any) => String(order.dinerId) === String(selectedDinerId)
+          );
+          if (!orderIdToPay && orderForCurrentDiner?.id) {
+            orderIdToPay = String(orderForCurrentDiner.id);
+          }
+        }
+
+        if (
+          !orderForCurrentDiner &&
+          currentOrder?.id &&
+          String(currentOrder.tableNumber) === String(selectedTableNumber) &&
+          String(currentOrder.dinerId) === String(selectedDinerId) &&
+          currentOrder.status !== 'PAID' &&
+          currentOrder.status !== 'CANCELLED'
+        ) {
+          orderForCurrentDiner = currentOrder;
+          if (!orderIdToPay) {
+            orderIdToPay = String(currentOrder.id);
+          }
+        }
+      }
+
+      if (latestActiveOrders.length === 0) {
+        latestActiveOrders = await refreshTableOrders();
+        trackDinerActivity(
+          selectedTableNumber,
+          latestActiveOrders.map((order: any) => order.dinerId)
+        );
+      }
+
       const unpaidOtherOrdersBeforePay = latestActiveOrders.filter(
         (order: any) => String(order.dinerId) !== String(selectedDinerId)
       );
 
-      if (!orderForCurrentDiner?.id) {
+      if (!orderIdToPay) {
         Alert.alert('No Unpaid Order', 'There is no unpaid order for the current diner.');
         return;
       }
 
-      const paidOrder = await markPaidOrder(orderForCurrentDiner.id);
+      const paidOrder = await markPaidOrder(orderIdToPay);
       addPaidOrderSnapshot(selectedTableNumber, paidOrder);
       trackDinerActivity(selectedTableNumber, [paidOrder?.dinerId, selectedDinerId]);
       const shouldShowPendingAlert = true;
@@ -441,6 +514,16 @@ export default function MenuScreen() {
             dinerId: String(nextOrder.dinerId),
             tabId: String(nextOrder.tabId),
           }));
+          dispatch(setDinerOrderId({
+            dinerId: String(nextOrder.dinerId),
+            orderId: String(nextOrder.id),
+            tableNumber: String(selectedTableNumber),
+          }));
+          dispatch(setDinerCheckoutState({
+            dinerId: String(nextOrder.dinerId),
+            checkoutState: 'payable',
+            tableNumber: String(selectedTableNumber),
+          }));
           dispatch(setCurrentOrder(nextOrder));
         }
         return;
@@ -454,6 +537,16 @@ export default function MenuScreen() {
           dispatch(setDinerInfo({
             dinerId: String(fallbackNext.dinerId),
             tabId: String(fallbackNext.tabId),
+          }));
+          dispatch(setDinerOrderId({
+            dinerId: String(fallbackNext.dinerId),
+            orderId: String(fallbackNext.id),
+            tableNumber: String(selectedTableNumber),
+          }));
+          dispatch(setDinerCheckoutState({
+            dinerId: String(fallbackNext.dinerId),
+            checkoutState: 'payable',
+            tableNumber: String(selectedTableNumber),
           }));
           dispatch(setCurrentOrder(fallbackNext));
         }
@@ -534,6 +627,16 @@ export default function MenuScreen() {
         }
 
         if (fallbackOrder) {
+          dispatch(setDinerOrderId({
+            dinerId: String(fallbackOrder.dinerId),
+            orderId: String(fallbackOrder.id),
+            tableNumber: String(selectedTableNumber),
+          }));
+          dispatch(setDinerCheckoutState({
+            dinerId: String(fallbackOrder.dinerId),
+            checkoutState: 'payable',
+            tableNumber: String(selectedTableNumber),
+          }));
           dispatch(setCurrentOrder(fallbackOrder));
         }
 
@@ -552,6 +655,7 @@ export default function MenuScreen() {
 
       clearPaidOrdersForTable(selectedTableNumber);
       clearTrackedDinerActivity(selectedTableNumber);
+      dispatch(clearDinerOrderIdsForTable(selectedTableNumber));
       dispatch(completeDiningSession());
       navigation.navigate('TableSelection');
     } catch (error: any) {
@@ -1093,10 +1197,10 @@ export default function MenuScreen() {
             styles.bottomActionButton,
             {
               backgroundColor: THEME.colors.accent,
-              opacity: (isMarkingPaid || isMarkPaidSubmitting || isSelectedDinerPaid) ? 0.45 : 1,
+              opacity: (isMarkingPaid || isMarkPaidSubmitting || isSelectedDinerPaid || !canMarkPaid) ? 0.45 : 1,
             },
           ]}
-          disabled={isMarkingPaid || isMarkPaidSubmitting || isSelectedDinerPaid}
+          disabled={isMarkingPaid || isMarkPaidSubmitting || isSelectedDinerPaid || !canMarkPaid}
           onPress={() => {
             if (guardPaidDinerEditAction()) return;
 

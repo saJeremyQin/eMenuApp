@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '../store/store';
-import { setCurrentOrder, setError } from '../store/orderSlice';
+import { setCurrentOrder, setDinerInfo, setError, setDinerOrderId, clearDinerOrderIdsForTable } from '../store/orderSlice';
 import { query as gqlQuery } from '../services/GraphQLService';
 import { GET_TABLE_STATUS } from '../graphql/queries';
 
@@ -37,6 +37,16 @@ export function useDinerOrders() {
       const activeOrders = tableStatus?.activeOrders || [];
 
       setTableOrders(activeOrders);
+      dispatch(clearDinerOrderIdsForTable(selectedTableNumber));
+      activeOrders.forEach((order: any) => {
+        if (order?.id && order?.dinerId) {
+          dispatch(setDinerOrderId({
+            dinerId: String(order.dinerId),
+            orderId: String(order.id),
+            tableNumber: String(selectedTableNumber),
+          }));
+        }
+      });
       dispatch(setError(null));
       return activeOrders;
     } catch (error) {
@@ -56,6 +66,7 @@ export function useDinerOrders() {
   // Effect 1: 加载表的订单（当表号改变时）
   useEffect(() => {
     if (!selectedTableNumber) {
+      lastTableNumberRef.current = undefined;
       setTableOrders([]);
       return;
     }
@@ -140,6 +151,16 @@ export function useDinerOrders() {
       console.log('✅ Order already matches current diner');
       return;
     }
+
+    dispatch(setDinerInfo({
+      dinerId: String(dinerOrder.dinerId),
+      tabId: String(dinerOrder.tabId),
+    }));
+    dispatch(setDinerOrderId({
+      dinerId: String(dinerOrder.dinerId),
+      orderId: String(dinerOrder.id),
+      tableNumber: String(selectedTableNumber),
+    }));
 
     console.log('✅ Switching currentOrder to:', {
       orderId: dinerOrder.id,

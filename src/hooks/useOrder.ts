@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useDispatch } from 'react-redux';
 import { AppDispatch } from '../store/store';
-import { setLoading, setError, setCurrentOrder } from '../store/orderSlice';
+import { setLoading, setError, setCurrentOrder, setDinerOrderId, setDinerCheckoutState } from '../store/orderSlice';
 import GraphQLService from '../services/GraphQLService';
 import { CONFIRM_ORDER_ITEMS, CANCEL_ORDER_ITEM, PAY_ORDER } from '../graphql/mutations';
 
@@ -26,6 +26,11 @@ export function useConfirmOrderItems() {
     }) => {
       setIsSubmitting(true);
       dispatch(setLoading(true));
+      dispatch(setDinerCheckoutState({
+        dinerId: String(input.dinerId),
+        checkoutState: 'sending',
+        tableNumber: String(input.tableNumber),
+      }));
 
       try {
         const response = await GraphQLService.mutation(CONFIRM_ORDER_ITEMS, { input });
@@ -36,9 +41,26 @@ export function useConfirmOrderItems() {
         console.log('🔧 useConfirmOrderItems - Extracted order:', order);
         
         dispatch(setCurrentOrder(order));
+        if (order?.id && order?.dinerId) {
+          dispatch(setDinerOrderId({
+            dinerId: String(order.dinerId),
+            orderId: String(order.id),
+            tableNumber: String(order.tableNumber),
+          }));
+          dispatch(setDinerCheckoutState({
+            dinerId: String(order.dinerId),
+            checkoutState: 'payable',
+            tableNumber: String(order.tableNumber),
+          }));
+        }
         dispatch(setError(null));
         return order;
       } catch (error) {
+        dispatch(setDinerCheckoutState({
+          dinerId: String(input.dinerId),
+          checkoutState: 'editing',
+          tableNumber: String(input.tableNumber),
+        }));
         const errorMsg = (error as any).message || '送厨失败';
         dispatch(setError(errorMsg));
         throw error;
@@ -106,6 +128,18 @@ export function usePayOrder() {
         const response = await GraphQLService.mutation(PAY_ORDER, { orderId });
         const order = (response as any).payOrder;
         dispatch(setCurrentOrder(order));
+        if (order?.dinerId) {
+          dispatch(setDinerOrderId({
+            dinerId: String(order.dinerId),
+            orderId: null,
+            tableNumber: String(order.tableNumber),
+          }));
+          dispatch(setDinerCheckoutState({
+            dinerId: String(order.dinerId),
+            checkoutState: 'editing',
+            tableNumber: String(order.tableNumber),
+          }));
+        }
         dispatch(setError(null));
         return order;
       } catch (error) {

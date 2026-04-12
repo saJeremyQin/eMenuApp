@@ -53,6 +53,8 @@ export interface DinerTab {
   tabId: string;
   name: string; // '🍴' for default, or user-provided name like 'Bob', 'Alice'
   tableNumber: string; // Associate diner with specific table
+  orderId?: string; // Active backend order id for this diner in current table session
+  checkoutState?: 'editing' | 'sending' | 'payable';
 }
 
 interface OrderState {
@@ -76,6 +78,15 @@ const initialState: OrderState = {
   selectedDinerId: '0',
   selectedTabId: 'tab-0',
 };
+
+function createSessionTabPrefix(tableNumber: string): string {
+  const token = Date.now().toString(36);
+  return `tab-${tableNumber}-${token}`;
+}
+
+function stripDinerSuffix(tabId: string): string {
+  return tabId.replace(/-\d+$/, '');
+}
 
 const orderSlice = createSlice({
   name: 'order',
@@ -180,18 +191,22 @@ const orderSlice = createSlice({
     setSelectedTable: (state, action: PayloadAction<string>) => {
       const tableNumber = action.payload;
       state.selectedTableNumber = tableNumber;
+      state.currentOrder = null;
+      state.error = null;
       
       // Get existing diners for this table
       const tableDiners = state.dinerTabs.filter(tab => tab.tableNumber === tableNumber);
       
       if (tableDiners.length === 0) {
         // First time opening this table: add default diner
-        const defaultTabId = `tab-${tableNumber}-0`;
+        const defaultTabId = `${createSessionTabPrefix(tableNumber)}-0`;
         state.dinerTabs.push({
           dinerId: '0',
           tabId: defaultTabId,
           name: '🍴',
           tableNumber,
+          orderId: undefined,
+          checkoutState: 'editing',
         });
         state.selectedDinerId = '0';
         state.selectedTabId = defaultTabId;
@@ -215,6 +230,60 @@ const orderSlice = createSlice({
       state.selectedTabId = action.payload.tabId;
     },
 
+    // 记录某个 diner 当前活跃订单 id（用于 mark paid 直接命中）
+    setDinerOrderId: (
+      state,
+      action: PayloadAction<{
+        dinerId: string;
+        orderId?: string | null;
+        tableNumber?: string;
+      }>
+    ) => {
+      const targetTable = action.payload.tableNumber || state.selectedTableNumber;
+      if (!targetTable) return;
+
+      const tab = state.dinerTabs.find(
+        t => t.tableNumber === targetTable && String(t.dinerId) === String(action.payload.dinerId)
+      );
+      if (!tab) return;
+
+      tab.orderId = action.payload.orderId || undefined;
+      tab.checkoutState = tab.orderId ? 'payable' : 'editing';
+    },
+
+    // 设置某个 diner 的结账状态机（editing -> sending -> payable）
+    setDinerCheckoutState: (
+      state,
+      action: PayloadAction<{
+        dinerId: string;
+        checkoutState: 'editing' | 'sending' | 'payable';
+        tableNumber?: string;
+      }>
+    ) => {
+      const targetTable = action.payload.tableNumber || state.selectedTableNumber;
+      if (!targetTable) return;
+
+      const tab = state.dinerTabs.find(
+        t => t.tableNumber === targetTable && String(t.dinerId) === String(action.payload.dinerId)
+      );
+      if (!tab) return;
+
+      tab.checkoutState = action.payload.checkoutState;
+    },
+
+    // 清空整桌 diner 的订单引用（避免跨会话复用）
+    clearDinerOrderIdsForTable: (state, action: PayloadAction<string | undefined>) => {
+      const targetTable = action.payload || state.selectedTableNumber;
+      if (!targetTable) return;
+
+      state.dinerTabs.forEach(tab => {
+        if (tab.tableNumber === targetTable) {
+          tab.orderId = undefined;
+          tab.checkoutState = 'editing';
+        }
+      });
+    },
+
     // 添加新的分餐（diner）
     addDinerTab: (
       state,
@@ -225,11 +294,17 @@ const orderSlice = createSlice({
       const tableNumber = state.selectedTableNumber;
       const tableDiners = state.dinerTabs.filter(tab => tab.tableNumber === tableNumber);
       const nextDinerId = tableDiners.length.toString();
+      const defaultTab = tableDiners.find(tab => tab.dinerId === '0');
+      const sessionPrefix = defaultTab
+        ? stripDinerSuffix(defaultTab.tabId)
+        : createSessionTabPrefix(tableNumber);
       const newTab: DinerTab = {
         dinerId: nextDinerId,
-        tabId: `tab-${tableNumber}-${nextDinerId}`,
+        tabId: `${sessionPrefix}-${nextDinerId}`,
         name: action.payload.name,
         tableNumber,
+        orderId: undefined,
+        checkoutState: 'editing',
       };
       state.dinerTabs.push(newTab);
       // 自动切换到新的 diner
@@ -351,6 +426,9 @@ export const {
   clearDraftItems,
   setSelectedTable,
   setDinerInfo,
+  setDinerOrderId,
+  setDinerCheckoutState,
+  clearDinerOrderIdsForTable,
   addDinerTab,
   removeDinerTab,
   resetDinerTabs,
