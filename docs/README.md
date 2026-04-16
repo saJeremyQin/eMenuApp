@@ -20,6 +20,9 @@ Confirm Order → Print Receipt → Update Status
 - 🔲 Thermal printer integration (TODO)
 - 🔲 Menu browsing & checkout (TODO)
 
+## Implementation Checklists
+- [Free Tier Single Waiter Implementation Checklist](./FREE_TIER_SINGLE_WAITER_IMPLEMENTATION_CHECKLIST.md)
+
 ## Setup Instructions
 
 ### 1. Install Dependencies

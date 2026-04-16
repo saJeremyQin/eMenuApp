@@ -2,7 +2,8 @@ import React from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
-import {Text} from 'react-native';
+import {Text, TouchableOpacity, Alert} from 'react-native';
+import {signOut} from 'aws-amplify/auth';
 import {THEME} from '../config/theme';
 
 // Screens
@@ -46,6 +47,27 @@ const OrderingStackNavigator = () => {
 // ============================================
 // AppTabs - Bottom Tab Navigation (2 tabs)
 // ============================================
+const handleLogout = () => {
+  Alert.alert(
+    'Sign Out',
+    'Are you sure you want to sign out?',
+    [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut();
+          } catch (error) {
+            Alert.alert('Error', 'Failed to sign out. Please try again.');
+          }
+        },
+      },
+    ],
+  );
+};
+
 const AppTabs = () => {
   return (
     <Tab.Navigator
@@ -56,7 +78,17 @@ const AppTabs = () => {
         const isDeepInStack = orderingRoutes && orderingRoutes.length > 1;
         
         return {
-          headerShown: false,
+          headerShown: true,
+          headerStyle: {backgroundColor: THEME.colors.darkBg},
+          headerTintColor: THEME.colors.textPrimary,
+          headerTitleStyle: {fontWeight: '700'},
+          headerRight: () => (
+            <TouchableOpacity onPress={handleLogout} style={{marginRight: 12}}>
+              <Text style={{fontSize: 14, color: THEME.colors.textSecondary}}>
+                Sign Out
+              </Text>
+            </TouchableOpacity>
+          ),
           tabBarActiveTintColor: THEME.colors.accent,
           tabBarInactiveTintColor: THEME.colors.mutedText,
           tabBarStyle: isDeepInStack
