@@ -57,8 +57,17 @@ export interface DinerTab {
   checkoutState?: 'editing' | 'sending' | 'payable';
 }
 
+// Per-table active orders used as an across-navigation cache so right-panel
+// items survive switching between tables.
+interface ActiveOrdersCache {
+  [tableNumber: string]: {
+    [dinerId: string]: Order;
+  };
+}
+
 interface OrderState {
   currentOrder: Order | null;
+  allActiveOrders: ActiveOrdersCache;
   draftItems: DraftItem[];
   dinerTabs: DinerTab[];
   isLoading: boolean;
@@ -70,8 +79,9 @@ interface OrderState {
 
 const initialState: OrderState = {
   currentOrder: null,
+  allActiveOrders: {},
   draftItems: [],
-  dinerTabs: [], // Will be populated based on selected table
+  dinerTabs: [],
   isLoading: false,
   error: null,
   selectedTableNumber: null,
@@ -92,10 +102,28 @@ const orderSlice = createSlice({
   name: 'order',
   initialState,
   reducers: {
-    // 设置当前订单
+    // 设置当前订单（同步写入 allActiveOrders 跨桌缓存）
     setCurrentOrder: (state, action: PayloadAction<Order>) => {
       state.currentOrder = action.payload;
       state.error = null;
+      const o = action.payload;
+      if (o.tableNumber && o.dinerId !== undefined && o.dinerId !== null) {
+        const tNum = String(o.tableNumber);
+        const dId = String(o.dinerId);
+        if (o.status === 'PAID' || o.status === 'CANCELLED') {
+          if (state.allActiveOrders[tNum]) {
+            delete state.allActiveOrders[tNum][dId];
+            if (Object.keys(state.allActiveOrders[tNum]).length === 0) {
+              delete state.allActiveOrders[tNum];
+            }
+          }
+        } else {
+          if (!state.allActiveOrders[tNum]) {
+            state.allActiveOrders[tNum] = {};
+          }
+          state.allActiveOrders[tNum][dId] = o;
+        }
+      }
     },
 
     // 清空当前订单
@@ -113,6 +141,7 @@ const orderSlice = createSlice({
         state.dinerTabs = state.dinerTabs.filter(
           tab => tab.tableNumber !== currentTableNumber
         );
+        delete state.allActiveOrders[currentTableNumber];
       }
 
       state.currentOrder = null;
@@ -191,7 +220,11 @@ const orderSlice = createSlice({
     setSelectedTable: (state, action: PayloadAction<string>) => {
       const tableNumber = action.payload;
       state.selectedTableNumber = tableNumber;
-      state.currentOrder = null;
+      // Restore the cached order for this table so right-panel shows items
+      // immediately while the background refresh catches up.
+      const tableCache = state.allActiveOrders[tableNumber];
+      const defaultDinerOrder = tableCache ? (tableCache['0'] || Object.values(tableCache)[0] || null) : null;
+      state.currentOrder = defaultDinerOrder;
       state.error = null;
       
       // Get existing diners for this table

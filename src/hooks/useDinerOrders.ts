@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '../store/store';
-import { setCurrentOrder, setDinerInfo, setError, setDinerOrderId, clearDinerOrderIdsForTable } from '../store/orderSlice';
+import { setCurrentOrder, setDinerInfo, setError, setDinerOrderId } from '../store/orderSlice';
 import { query as gqlQuery } from '../services/GraphQLService';
 import { GET_TABLE_STATUS } from '../graphql/queries';
 
@@ -14,11 +14,32 @@ export function useDinerOrders() {
   const selectedTableNumber = useSelector((state: RootState) => state.order.selectedTableNumber);
   const selectedDinerId = useSelector((state: RootState) => state.order.selectedDinerId);
   const currentOrder = useSelector((state: RootState) => state.order.currentOrder);
+  const allActiveOrders = useSelector((state: RootState) => state.order.allActiveOrders);
   
   // 维护表的所有订单的本地缓存
-  const [tableOrders, setTableOrders] = useState<any[]>([]);
+  // Seed initial value from Redux allActiveOrders so items show before network.
+  const [tableOrders, setTableOrders] = useState<any[]>(() => {
+    return [];
+  });
   const [isLoading, setIsLoading] = useState(false);
   const lastTableNumberRef = useRef<string | undefined>(undefined);
+
+  // Whenever selectedTableNumber changes, immediately populate tableOrders from
+  // the Redux allActiveOrders cache so the right-panel has data before the API call.
+  useEffect(() => {
+    if (!selectedTableNumber) {
+      setTableOrders([]);
+      return;
+    }
+    const cachedTable = allActiveOrders[selectedTableNumber];
+    if (cachedTable) {
+      const orders = Object.values(cachedTable);
+      if (orders.length > 0) {
+        setTableOrders(orders);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTableNumber]);
 
   const refreshTableOrders = useCallback(async () => {
     if (!selectedTableNumber) {
@@ -37,7 +58,6 @@ export function useDinerOrders() {
       const activeOrders = tableStatus?.activeOrders || [];
 
       setTableOrders(activeOrders);
-      dispatch(clearDinerOrderIdsForTable(selectedTableNumber));
       activeOrders.forEach((order: any) => {
         if (order?.id && order?.dinerId) {
           dispatch(setDinerOrderId({

@@ -50,6 +50,7 @@ export default function MenuScreen() {
   
   // 使用 hook 管理 diner 订单切换
   const { refreshTableOrders, tableOrders } = useDinerOrders();
+  const allActiveOrders = useSelector((state: RootState) => state.order.allActiveOrders);
   
   // Filter diner tabs to show only for the current table
   const dinerTabs = useMemo(() => {
@@ -60,9 +61,32 @@ export default function MenuScreen() {
     return dinerTabs.find(tab => String(tab.dinerId) === selectedDinerIdStr);
   }, [dinerTabs, selectedDinerIdStr]);
 
+  const selectedDinerOrder = useMemo(() => {
+    // Prefer the Redux allActiveOrders cache (immediately available, cross-navigation).
+    if (selectedTableNumber && allActiveOrders[selectedTableNumber]) {
+      const cached = allActiveOrders[selectedTableNumber][selectedDinerIdStr];
+      if (cached) return cached;
+    }
+    // Fallback: hook local state (populated after background refresh).
+    return tableOrders.find((order: any) => String(order?.dinerId) === selectedDinerIdStr) || null;
+  }, [allActiveOrders, selectedTableNumber, selectedDinerIdStr, tableOrders]);
+
   const canMarkPaid = useMemo(() => {
     return currentDinerTab?.checkoutState === 'payable' && !!currentDinerTab?.orderId;
   }, [currentDinerTab]);
+
+  // Returning to Menu can clear currentOrder temporarily; restore it from tableOrders.
+  useEffect(() => {
+    if (!selectedTableNumber || !selectedDinerOrder) {
+      return;
+    }
+
+    if (String(currentOrder?.id) === String(selectedDinerOrder.id)) {
+      return;
+    }
+
+    dispatch(setCurrentOrder(selectedDinerOrder));
+  }, [selectedTableNumber, selectedDinerOrder, currentOrder?.id, dispatch]);
 
   // Verify selectedDinerId belongs to current table, reset if not
   useEffect(() => {
@@ -708,11 +732,11 @@ export default function MenuScreen() {
           onPress: async () => {
             try {
               // Call backend to cancel item
-              if (!currentOrder?.id) {
+              if (!displayOrder?.id) {
                 Alert.alert('Error', 'Order ID not found');
                 return;
               }
-              await cancelItem(currentOrder.id, item.itemId, 'Customer request');
+              await cancelItem(displayOrder.id, item.itemId, 'Customer request');
               console.log(`✅ Cancelled item: ${item.name}`);
             } catch (error) {
               console.error('❌ Failed to cancel item:', error);
@@ -727,17 +751,33 @@ export default function MenuScreen() {
   const totalDraftItems = draftItems.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = draftItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
+  const displayOrder = useMemo(() => {
+    if (selectedDinerOrder) {
+      return selectedDinerOrder;
+    }
+
+    if (
+      currentOrder &&
+      String(currentOrder.tableNumber) === String(selectedTableNumber) &&
+      String(currentOrder.dinerId) === selectedDinerIdStr
+    ) {
+      return currentOrder;
+    }
+
+    return null;
+  }, [selectedDinerOrder, currentOrder, selectedTableNumber, selectedDinerIdStr]);
+
   // 提取已送厨的批次（保留批次结构，按当前 diner 过滤）
   const confirmedBatches = useMemo(() => {
-    if (!currentOrder?.batches) {
-      console.log('🔍 MenuScreen: No currentOrder.batches', currentOrder);
+    if (!displayOrder?.batches) {
+      console.log('🔍 MenuScreen: No displayOrder.batches', displayOrder);
       return [];
     }
     
     console.log('🔍 MenuScreen: Checking batches', {
-      totalBatches: currentOrder.batches.length,
+      totalBatches: displayOrder.batches.length,
       selectedDinerId,
-      batchesDetail: currentOrder.batches.map((b: any, idx: number) => ({
+      batchesDetail: displayOrder.batches.map((b: any, idx: number) => ({
         index: idx,
         batchId: b.batchId,
         dinerId: b.dinerId,
@@ -749,7 +789,7 @@ export default function MenuScreen() {
     });
     
     // Filter batches for current diner/tab and those with confirmed items
-    const batchesWithConfirmed = currentOrder.batches.filter(batch => {
+    const batchesWithConfirmed = displayOrder.batches.filter(batch => {
       const isForCurrentDiner = String(batch.dinerId) === selectedDinerIdStr;
       const hasConfirmedItems = batch.items.some(item => item.status === 'CONFIRMED');
       console.log(`  Batch ${batch.batchId}: dinerId=${batch.dinerId}, isForCurrentDiner=${isForCurrentDiner}, hasConfirmedItems=${hasConfirmedItems}`);
@@ -760,7 +800,7 @@ export default function MenuScreen() {
       batches: batchesWithConfirmed,
     });
     return batchesWithConfirmed;
-  }, [currentOrder, selectedDinerIdStr]);
+  }, [displayOrder, selectedDinerIdStr]);
 
   // 跟踪所有已确认菜品总数（用于计算总金额）
   const confirmedItems = useMemo(() => {
@@ -770,14 +810,14 @@ export default function MenuScreen() {
   }, [confirmedBatches]);
 
   const cancelledItems = useMemo(() => {
-    if (!currentOrder?.batches) return [];
+    if (!displayOrder?.batches) return [];
     // Filter cancelled items for current diner only
-    return currentOrder.batches
+    return displayOrder.batches
       .filter(batch => String(batch.dinerId) === selectedDinerIdStr)
       .flatMap(batch =>
         batch.items.filter(item => item.status === 'CANCELLED')
       );
-  }, [currentOrder, selectedDinerIdStr]);
+  }, [displayOrder, selectedDinerIdStr]);
 
   const totalConfirmedAmount = confirmedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const totalCancelledAmount = cancelledItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);

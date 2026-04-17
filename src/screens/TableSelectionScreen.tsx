@@ -35,6 +35,7 @@ export default function TableSelectionScreen() {
   const insets = useSafeAreaInsets();
   const selectedTableNumber = useSelector((state: RootState) => state.order.selectedTableNumber);
   const currentOrder = useSelector((state: RootState) => state.order.currentOrder);
+  const allActiveOrders = useSelector((state: RootState) => state.order.allActiveOrders);
   const [dimensions, setDimensions] = useState(Dimensions.get('window'));
   const [tableSummaries, setTableSummaries] = useState<Record<string, TableSummary>>({});
 
@@ -65,40 +66,30 @@ export default function TableSelectionScreen() {
   };
 
   const loadTableSummaries = useCallback(async () => {
-    const nextSummaries: Record<string, TableSummary> = PRESET_TABLES.reduce((acc, tableNumber) => {
-      acc[tableNumber] = tableSummaries[tableNumber] || { totalAmount: 0, hasActiveOrder: false };
-      return acc;
-    }, {} as Record<string, TableSummary>);
-
-    let optimisticTableNumber: string | null = null;
-    let optimisticSummary: TableSummary | null = null;
-
-    // Optimistic display for the table the waiter just worked on.
-    if (
-      selectedTableNumber &&
-      currentOrder &&
-      String(currentOrder.tableNumber) === String(selectedTableNumber) &&
-      currentOrder.status !== 'PAID' &&
-      currentOrder.status !== 'CANCELLED'
-    ) {
-      const localSubtotal = (() => {
-        const totalConfirmed = Number(currentOrder.totalConfirmedAmount);
-        if (!Number.isNaN(totalConfirmed) && totalConfirmed > 0) {
-          return totalConfirmed;
+    // Step 1: immediately seed from Redux allActiveOrders cache so no table flashes to 0.
+    setTableSummaries(prev => {
+      const seeded: Record<string, TableSummary> = { ...prev };
+      PRESET_TABLES.forEach(tableNumber => {
+        const cachedOrders = allActiveOrders[tableNumber]
+          ? Object.values(allActiveOrders[tableNumber])
+          : [];
+        if (cachedOrders.length > 0) {
+          const subtotal = cachedOrders.reduce((sum: number, o: any) => {
+            const amt = Number(o?.totalConfirmedAmount);
+            return sum + (amt > 0 ? amt : calculateOrderSubtotalFromBatches(o));
+          }, 0);
+          seeded[tableNumber] = {
+            totalAmount: addTax(Math.max(subtotal, 0)),
+            hasActiveOrder: true,
+          };
+        } else if (!seeded[tableNumber]) {
+          seeded[tableNumber] = { totalAmount: 0, hasActiveOrder: false };
         }
-        return calculateOrderSubtotalFromBatches(currentOrder);
-      })();
+      });
+      return seeded;
+    });
 
-      nextSummaries[selectedTableNumber] = {
-        totalAmount: addTax(Math.max(localSubtotal, 0)),
-        hasActiveOrder: true,
-      };
-      optimisticTableNumber = selectedTableNumber;
-      optimisticSummary = nextSummaries[selectedTableNumber];
-
-      setTableSummaries({ ...nextSummaries });
-    }
-
+    // Step 2: fetch each table from backend incrementally — update as each comes back.
     for (const tableNumber of PRESET_TABLES) {
       try {
         const response = await gqlQuery(GET_TABLE_STATUS, { tableNumber });
@@ -113,52 +104,47 @@ export default function TableSelectionScreen() {
         );
         const subtotalFromOrders = activeOrders.reduce((sum: number, order: any) => {
           const orderSubtotal = Number(order?.totalConfirmedAmount);
-          if (!Number.isNaN(orderSubtotal) && orderSubtotal > 0) {
-            return sum + orderSubtotal;
-          }
-          return sum + calculateOrderSubtotalFromBatches(order);
+          return sum + ((!Number.isNaN(orderSubtotal) && orderSubtotal > 0)
+            ? orderSubtotal
+            : calculateOrderSubtotalFromBatches(order));
         }, 0);
 
         const subtotal = Math.max(subtotalFromTable, subtotalFromDiners, subtotalFromOrders, 0);
         const totalAmount = addTax(subtotal);
         const hasActiveOrder = activeOrders.length > 0 || subtotal > 0;
 
-        const remoteSummary: TableSummary = {
-          totalAmount,
-          hasActiveOrder,
+        const cachedOrders = allActiveOrders[tableNumber]
+          ? Object.values(allActiveOrders[tableNumber])
+          : [];
+        const hasCachedActive = cachedOrders.length > 0;
+        const cachedSubtotal = cachedOrders.reduce((sum: number, o: any) => {
+          const amt = Number(o?.totalConfirmedAmount);
+          return sum + (amt > 0 ? amt : calculateOrderSubtotalFromBatches(o));
+        }, 0);
+        const cachedSummary: TableSummary = {
+          totalAmount: addTax(Math.max(cachedSubtotal, 0)),
+          hasActiveOrder: hasCachedActive,
         };
 
-        // Guard against temporary stale backend reads right after returning from Menu.
-        if (
-          optimisticTableNumber &&
-          optimisticSummary &&
-          tableNumber === optimisticTableNumber &&
-          !remoteSummary.hasActiveOrder &&
-          remoteSummary.totalAmount === 0
-        ) {
-          nextSummaries[tableNumber] = optimisticSummary;
-        } else {
-          nextSummaries[tableNumber] = remoteSummary;
-        }
-
-        if (selectedTableNumber && tableNumber === selectedTableNumber) {
-          console.log(`📊 Table ${tableNumber} summary:`, {
-            subtotalFromTable,
-            subtotalFromDiners,
-            subtotalFromOrders,
-            subtotal,
-            totalAmount,
-            hasActiveOrder,
-            activeOrdersCount: activeOrders.length,
-          });
-        }
+        // Update this table as soon as its result arrives — no need to wait for all 24.
+        setTableSummaries(prev => {
+          // Guard against transient stale backend reads when a table just got new orders.
+          if (!hasActiveOrder && totalAmount === 0 && hasCachedActive) {
+            return {
+              ...prev,
+              [tableNumber]: cachedSummary,
+            };
+          }
+          return {
+            ...prev,
+            [tableNumber]: { totalAmount, hasActiveOrder },
+          };
+        });
       } catch (error) {
         console.warn(`⚠️ Failed to load table summary for table ${tableNumber}:`, error);
       }
     }
-
-    setTableSummaries(nextSummaries);
-  }, [selectedTableNumber, currentOrder, tableSummaries]);
+  }, [allActiveOrders]);
 
   useFocusEffect(
     useCallback(() => {
