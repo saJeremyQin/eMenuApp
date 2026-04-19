@@ -13,6 +13,7 @@ import TableSelectionScreen from '../screens/TableSelectionScreen';
 import OrderDetailsScreen from '../screens/OrderDetailsScreen';
 import OrderReviewScreen from '../screens/OrderReviewScreen';
 import AboutScreen from '../screens/AboutScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -45,7 +46,7 @@ const OrderingStackNavigator = () => {
 };
 
 // ============================================
-// AppTabs - Bottom Tab Navigation (2 tabs)
+// AppTabs - Bottom Tab Navigation (3 tabs)
 // ============================================
 const handleLogout = () => {
   Alert.alert(
@@ -109,6 +110,8 @@ const AppTabs = () => {
               label = '🍴';
             } else if (route.name === 'About') {
               label = 'ℹ️';
+            } else if (route.name === 'Settings') {
+              label = '⚙️';
             }
             return <Text style={{fontSize: 24}}>{label}</Text>;
           },
@@ -123,6 +126,11 @@ const AppTabs = () => {
         name="About"
         component={AboutScreen}
         options={{title: 'About'}}
+      />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{title: 'Settings'}}
       />
     </Tab.Navigator>
   );

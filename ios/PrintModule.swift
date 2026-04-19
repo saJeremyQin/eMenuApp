@@ -1,12 +1,96 @@
 import Foundation
+#if canImport(UIKit)
 import UIKit
 import WebKit
+import Darwin
 
 @objc(PrintModule)
-class PrintModule: NSObject {
+class PrintModule: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
+  private let printerServiceTypes = [
+    "_pdl-datastream._tcp.",
+    "_printer._tcp.",
+    "_ipp._tcp.",
+    "_ipps._tcp.",
+  ]
+  private var serviceBrowsers: [NetServiceBrowser] = []
+  private var pendingServices: [NetService] = []
+  private var discoveredPrinters: [[String: Any]] = []
+  private var discoveredPrinterKeys = Set<String>()
+  private var discoveryTimer: Timer?
+  private var discoveryResolver: RCTPromiseResolveBlock?
+  private var discoveryRejecter: RCTPromiseRejectBlock?
+
   @objc
   static func requiresMainQueueSetup() -> Bool {
     return true
+  }
+
+  @objc
+  func printToLANPrinter(
+    _ html: String,
+    printerIP: String,
+    printerPort: NSNumber,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    let host = printerIP.trimmingCharacters(in: .whitespacesAndNewlines)
+    let port = printerPort.intValue
+
+    guard !host.isEmpty else {
+      reject("LAN_PRINT_ERROR", "Printer IP or host is empty", nil)
+      return
+    }
+    guard (1...65535).contains(port) else {
+      reject("LAN_PRINT_ERROR", "Invalid printer port: \(port)", nil)
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      do {
+        let escPosData = self.makeEscPosData(from: html)
+        try self.sendRawData(escPosData, host: host, port: UInt16(port))
+        DispatchQueue.main.async {
+          resolve("LAN print completed")
+        }
+      } catch {
+        DispatchQueue.main.async {
+          reject("LAN_PRINT_ERROR", error.localizedDescription, error)
+        }
+      }
+    }
+  }
+
+  @objc
+  func discoverLANPrinters(
+    _ timeoutMs: NSNumber,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    DispatchQueue.main.async {
+      if self.discoveryResolver != nil {
+        reject("DISCOVERY_BUSY", "Printer discovery is already running", nil)
+        return
+      }
+
+      self.discoveryResolver = resolve
+      self.discoveryRejecter = reject
+      self.discoveredPrinters = []
+      self.discoveredPrinterKeys.removeAll()
+      self.pendingServices = []
+      self.stopServiceBrowsers()
+
+      let timeoutSeconds = max(1.0, min(timeoutMs.doubleValue / 1000.0, 15.0))
+      self.discoveryTimer = Timer.scheduledTimer(withTimeInterval: timeoutSeconds, repeats: false) { _ in
+        self.finishDiscovery()
+      }
+
+      for serviceType in self.printerServiceTypes {
+        let browser = NetServiceBrowser()
+        browser.delegate = self
+        browser.searchForServices(ofType: serviceType, inDomain: "local.")
+        self.serviceBrowsers.append(browser)
+      }
+    }
   }
 
   @objc
@@ -64,6 +148,216 @@ class PrintModule: NSObject {
       top = presented
     }
     return top
+  }
+
+  private func makeEscPosData(from html: String) -> Data {
+    let text = plainText(from: html)
+    var bytes = Data([0x1B, 0x40]) // Initialize printer
+    bytes.append(Data([0x1B, 0x61, 0x00])) // Left align
+
+    if let textData = text.data(using: .utf8) {
+      bytes.append(textData)
+    }
+
+    bytes.append(Data([0x0A, 0x0A]))
+    bytes.append(Data([0x1D, 0x56, 0x00])) // Full cut
+    return bytes
+  }
+
+  private func plainText(from html: String) -> String {
+    var value = html
+      .replacingOccurrences(of: "(?i)<br\\s*/?>", with: "\n", options: .regularExpression)
+      .replacingOccurrences(of: "(?i)</p>", with: "\n", options: .regularExpression)
+      .replacingOccurrences(of: "(?i)</div>", with: "\n", options: .regularExpression)
+      .replacingOccurrences(of: "(?i)</tr>", with: "\n", options: .regularExpression)
+      .replacingOccurrences(of: "(?i)</h[1-6]>", with: "\n", options: .regularExpression)
+
+    if let regex = try? NSRegularExpression(pattern: "<[^>]+>", options: []) {
+      let fullRange = NSRange(location: 0, length: value.utf16.count)
+      value = regex.stringByReplacingMatches(in: value, options: [], range: fullRange, withTemplate: "")
+    }
+
+    value = value
+      .replacingOccurrences(of: "&nbsp;", with: " ")
+      .replacingOccurrences(of: "&amp;", with: "&")
+      .replacingOccurrences(of: "&lt;", with: "<")
+      .replacingOccurrences(of: "&gt;", with: ">")
+
+    return value.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private func sendRawData(_ data: Data, host: String, port: UInt16) throws {
+    var hints = addrinfo(
+      ai_flags: AI_ADDRCONFIG,
+      ai_family: AF_UNSPEC,
+      ai_socktype: SOCK_STREAM,
+      ai_protocol: IPPROTO_TCP,
+      ai_addrlen: 0,
+      ai_canonname: nil,
+      ai_addr: nil,
+      ai_next: nil
+    )
+
+    var infoPointer: UnsafeMutablePointer<addrinfo>?
+    let status = getaddrinfo(host, String(port), &hints, &infoPointer)
+    guard status == 0, let firstInfo = infoPointer else {
+      throw NSError(domain: "PrintModule", code: 2001, userInfo: [
+        NSLocalizedDescriptionKey: "Failed to resolve printer host \(host): \(String(cString: gai_strerror(status)))",
+      ])
+    }
+    defer { freeaddrinfo(firstInfo) }
+
+    var currentInfo: UnsafeMutablePointer<addrinfo>? = firstInfo
+    var lastErrorMessage = "Failed to connect to \(host):\(port)"
+
+    while let info = currentInfo {
+      let socketFD = Darwin.socket(info.pointee.ai_family, info.pointee.ai_socktype, info.pointee.ai_protocol)
+      if socketFD >= 0 {
+        let connectResult = Darwin.connect(socketFD, info.pointee.ai_addr, info.pointee.ai_addrlen)
+        if connectResult == 0 {
+          var sentTotal = 0
+          let bytes = [UInt8](data)
+          while sentTotal < bytes.count {
+            let remaining = bytes.count - sentTotal
+            let sent = bytes.withUnsafeBytes { rawBytes -> Int in
+              guard let base = rawBytes.baseAddress else { return -1 }
+              let pointer = base.advanced(by: sentTotal)
+              return Darwin.send(socketFD, pointer, remaining, 0)
+            }
+
+            if sent <= 0 {
+              lastErrorMessage = "Failed while sending print data: \(String(cString: strerror(errno)))"
+              break
+            }
+
+            sentTotal += sent
+          }
+
+          Darwin.shutdown(socketFD, SHUT_WR)
+          Darwin.close(socketFD)
+
+          if sentTotal == bytes.count {
+            return
+          }
+        } else {
+          lastErrorMessage = "Failed to connect to \(host):\(port): \(String(cString: strerror(errno)))"
+          Darwin.close(socketFD)
+        }
+      }
+
+      currentInfo = info.pointee.ai_next
+    }
+
+    throw NSError(domain: "PrintModule", code: 2002, userInfo: [NSLocalizedDescriptionKey: lastErrorMessage])
+  }
+
+  private func stopServiceBrowsers() {
+    serviceBrowsers.forEach { $0.stop() }
+    serviceBrowsers.removeAll()
+  }
+
+  private func finishDiscovery() {
+    stopServiceBrowsers()
+    discoveryTimer?.invalidate()
+    discoveryTimer = nil
+
+    let result = discoveredPrinters.sorted {
+      let left = ($0["name"] as? String) ?? ""
+      let right = ($1["name"] as? String) ?? ""
+      return left.localizedCaseInsensitiveCompare(right) == .orderedAscending
+    }
+
+    discoveryResolver?(result)
+    discoveryResolver = nil
+    discoveryRejecter = nil
+    pendingServices.removeAll()
+  }
+
+  private func addDiscoveredPrinter(name: String, host: String, port: Int, serviceType: String) {
+    let safeHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !safeHost.isEmpty else { return }
+
+    let key = "\(safeHost):\(port):\(serviceType)"
+    guard !discoveredPrinterKeys.contains(key) else { return }
+
+    discoveredPrinterKeys.insert(key)
+    discoveredPrinters.append([
+      "name": name,
+      "host": safeHost,
+      "port": port,
+      "serviceType": serviceType,
+    ])
+  }
+
+  private func ipAddresses(from service: NetService) -> [String] {
+    guard let addresses = service.addresses else { return [] }
+    var result = Set<String>()
+
+    for addressData in addresses {
+      addressData.withUnsafeBytes { rawBuffer in
+        guard let sockaddrPointer = rawBuffer.baseAddress?.assumingMemoryBound(to: sockaddr.self) else {
+          return
+        }
+
+        let family = Int32(sockaddrPointer.pointee.sa_family)
+        if family == AF_INET {
+          var addr = rawBuffer.baseAddress!.assumingMemoryBound(to: sockaddr_in.self).pointee.sin_addr
+          var buffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
+          if inet_ntop(AF_INET, &addr, &buffer, socklen_t(INET_ADDRSTRLEN)) != nil {
+            result.insert(String(cString: buffer))
+          }
+        } else if family == AF_INET6 {
+          var addr = rawBuffer.baseAddress!.assumingMemoryBound(to: sockaddr_in6.self).pointee.sin6_addr
+          var buffer = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
+          if inet_ntop(AF_INET6, &addr, &buffer, socklen_t(INET6_ADDRSTRLEN)) != nil {
+            result.insert(String(cString: buffer))
+          }
+        }
+      }
+    }
+
+    return Array(result)
+  }
+
+  // MARK: - NetServiceBrowserDelegate
+
+  func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
+    pendingServices.append(service)
+    service.delegate = self
+    service.resolve(withTimeout: 2.0)
+  }
+
+  func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
+    if serviceBrowsers.allSatisfy({ !$0.isEqual(browser) }) {
+      finishDiscovery()
+    }
+  }
+
+  // MARK: - NetServiceDelegate
+
+  func netServiceDidResolveAddress(_ sender: NetService) {
+    let hostCandidates = ipAddresses(from: sender)
+    if hostCandidates.isEmpty, let hostName = sender.hostName {
+      addDiscoveredPrinter(
+        name: sender.name,
+        host: hostName,
+        port: sender.port,
+        serviceType: sender.type
+      )
+    } else {
+      hostCandidates.forEach { host in
+        addDiscoveredPrinter(
+          name: sender.name,
+          host: host,
+          port: sender.port,
+          serviceType: sender.type
+        )
+      }
+    }
+  }
+
+  func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
+    _ = errorDict
   }
 }
 
@@ -198,3 +492,4 @@ final class ReceiptPreviewController: UIViewController, WKNavigationDelegate {
     present(alert, animated: true)
   }
 }
+#endif

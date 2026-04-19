@@ -1,10 +1,19 @@
 import { NativeModules, Platform, Alert } from 'react-native';
 import { useSelector } from 'react-redux';
 import { useMemo, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootState } from '../store/store';
 import { generateReceiptHTML, ReceiptData } from '../utils/receiptTemplate';
 
 const { PrintModule } = NativeModules;
+const PRINTER_STORAGE_KEY = '@emenu/printer_config';
+
+type SavedPrinterConfig = {
+  host: string;
+  port?: number;
+  name?: string;
+  serviceType?: string;
+};
 
 // 餐馆信息 - 后续可改为从后端 API 获取
 const fetchRestaurantInfo = async (): Promise<{
@@ -114,17 +123,50 @@ export const usePrintReceipt = () => {
     return generateReceiptHTML(receiptData);
   }, [confirmedItems, allConfirmedItems, selectedTableNumber, allDinerTabs, currentOrder]);
 
+  const getSavedPrinterConfig = useCallback(async (): Promise<SavedPrinterConfig | null> => {
+    try {
+      const raw = await AsyncStorage.getItem(PRINTER_STORAGE_KEY);
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw) as SavedPrinterConfig;
+      if (!parsed?.host) return null;
+      return parsed;
+    } catch (error) {
+      console.warn('⚠️ Failed to read printer config:', error);
+      return null;
+    }
+  }, []);
+
+  const printWithLanFallback = useCallback(async (html: string) => {
+    if (!PrintModule?.printHTML) {
+      throw new Error('Print module is not available. Please restart the app.');
+    }
+
+    const savedPrinter = await getSavedPrinterConfig();
+    const canUseLan =
+      !!savedPrinter?.host &&
+      !!PrintModule?.printToLANPrinter;
+
+    if (canUseLan) {
+      const port = Number(savedPrinter?.port) || 9100;
+      try {
+        await PrintModule.printToLANPrinter(html, savedPrinter!.host, port);
+        return;
+      } catch (lanError) {
+        console.warn('⚠️ LAN print failed, fallback to AirPrint:', lanError);
+      }
+    }
+
+    await PrintModule.printHTML(html);
+  }, [getSavedPrinterConfig]);
+
   const printReceipt = useCallback(async (printAllDiners: boolean = true) => {
     try {
       const html = await buildReceiptHTML(printAllDiners);
       if (!html) return;
 
       if (Platform.OS === 'ios') {
-        if (!PrintModule?.printHTML) {
-          Alert.alert('Print Error', 'Print module is not available. Please restart the app.');
-          return;
-        }
-        await PrintModule.printHTML(html);
+        await printWithLanFallback(html);
       } else {
         Alert.alert('Not Supported', 'Printing is currently only supported on iOS.');
       }
@@ -132,7 +174,7 @@ export const usePrintReceipt = () => {
       console.error('❌ Print failed:', error);
       Alert.alert('Print Error', error.message || 'Failed to print receipt.');
     }
-  }, [buildReceiptHTML]);
+  }, [buildReceiptHTML, printWithLanFallback]);
 
   const previewReceipt = useCallback(async (printAllDiners: boolean = true) => {
     try {
@@ -221,11 +263,7 @@ export const usePrintReceipt = () => {
       if (!html) return;
 
       if (Platform.OS === 'ios') {
-        if (!PrintModule?.printHTML) {
-          Alert.alert('Print Error', 'Print module is not available. Please restart the app.');
-          return;
-        }
-        await PrintModule.printHTML(html);
+        await printWithLanFallback(html);
       } else {
         Alert.alert('Not Supported', 'Printing is currently only supported on iOS.');
       }
@@ -233,7 +271,7 @@ export const usePrintReceipt = () => {
       console.error('❌ Table summary print failed:', error);
       Alert.alert('Print Error', error.message || 'Failed to print table summary receipt.');
     }
-  }, [buildTableSummaryHTMLFromOrders]);
+  }, [buildTableSummaryHTMLFromOrders, printWithLanFallback]);
 
   const previewTableSummaryFromOrders = useCallback(async (orders: ReceiptOrderLike[]) => {
     try {
