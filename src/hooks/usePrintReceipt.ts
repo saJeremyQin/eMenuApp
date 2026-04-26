@@ -1,6 +1,6 @@
 import { NativeModules, Platform, Alert } from 'react-native';
 import { useSelector } from 'react-redux';
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootState } from '../store/store';
 import { generateReceiptHTML, ReceiptData } from '../utils/receiptTemplate';
@@ -172,10 +172,12 @@ export const usePrintReceipt = () => {
     });
   }, []);
 
+  const lastErrorRef = useRef<any>(null);
+
   // LAN 打印重试机制
   const printToLANWithRetry = useCallback(
     async (html: string, host: string, port: number, maxRetries = 3) => {
-      let lastError: any = null;
+      lastErrorRef.current = null;
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
@@ -183,11 +185,12 @@ export const usePrintReceipt = () => {
           console.log(`✅ LAN print succeeded on attempt ${attempt}/${maxRetries}`);
           return true;
         } catch (error) {
-          lastError = error;
+          lastErrorRef.current = error;
           const errorType = classifyPrintError(error);
+          const err = error as any;
           console.warn(
             `⚠️ LAN print attempt ${attempt}/${maxRetries} failed [${errorType}]:`,
-            error?.localizedDescription || error?.message
+            err?.localizedDescription || err?.message
           );
 
           // 如果是用户取消，不需要重试
@@ -235,7 +238,7 @@ export const usePrintReceipt = () => {
         logPrintFallback(
           'LAN_FAILED',
           savedPrinter?.host,
-          lastError || { message: 'Unknown error' }
+          lastErrorRef.current || { message: 'Unknown error' }
         );
         Alert.alert(
           'LAN Printer Unavailable',
