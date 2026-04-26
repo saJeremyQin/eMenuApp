@@ -137,28 +137,117 @@ export const usePrintReceipt = () => {
     }
   }, []);
 
-  const printWithLanFallback = useCallback(async (html: string) => {
-    if (!PrintModule?.printHTML) {
-      throw new Error('Print module is not available. Please restart the app.');
+  // 错误分类辅助函数
+  const classifyPrintError = (error: any) => {
+    const msg = (error?.message || error?.localizedDescription || '').toLowerCase();
+    const description = error?.localizedDescription?.toLowerCase() || '';
+    
+    if (msg.includes('timeout') || description.includes('timeout')) {
+      return 'TIMEOUT';
     }
+    if (msg.includes('connect') || description.includes('failed to connect') || description.includes('refused')) {
+      return 'CONNECTION_FAILED';
+    }
+    if (msg.includes('resolve') || description.includes('failed to resolve')) {
+      return 'DNS_RESOLUTION';
+    }
+    if (msg.includes('send') || description.includes('failed while sending')) {
+      return 'TRANSMISSION_ERROR';
+    }
+    if (msg.includes('cancel')) {
+      return 'USER_CANCELLED';
+    }
+    return 'UNKNOWN';
+  };
 
-    const savedPrinter = await getSavedPrinterConfig();
-    const canUseLan =
-      !!savedPrinter?.host &&
-      !!PrintModule?.printToLANPrinter;
+  // 日志记录打印降级事件
+  const logPrintFallback = useCallback((reason: string, printerIP: string | undefined, error: any) => {
+    const errorType = classifyPrintError(error);
+    console.log('📊 Print Fallback Event:', {
+      timestamp: new Date().toISOString(),
+      reason,
+      printerIP,
+      errorType,
+      errorMessage: error?.localizedDescription || error?.message,
+    });
+  }, []);
 
-    if (canUseLan) {
-      const port = Number(savedPrinter?.port) || 9100;
-      try {
-        await PrintModule.printToLANPrinter(html, savedPrinter!.host, port);
-        return;
-      } catch (lanError) {
-        console.warn('⚠️ LAN print failed, fallback to AirPrint:', lanError);
+  // LAN 打印重试机制
+  const printToLANWithRetry = useCallback(
+    async (html: string, host: string, port: number, maxRetries = 3) => {
+      let lastError: any = null;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          await PrintModule.printToLANPrinter(html, host, port);
+          console.log(`✅ LAN print succeeded on attempt ${attempt}/${maxRetries}`);
+          return true;
+        } catch (error) {
+          lastError = error;
+          const errorType = classifyPrintError(error);
+          console.warn(
+            `⚠️ LAN print attempt ${attempt}/${maxRetries} failed [${errorType}]:`,
+            error?.localizedDescription || error?.message
+          );
+
+          // 如果是用户取消，不需要重试
+          if (errorType === 'USER_CANCELLED') {
+            throw error;
+          }
+
+          // 如果不是最后一次尝试，延迟后重试
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 500 * attempt)); // 递增延迟
+          }
+        }
       }
-    }
 
-    await PrintModule.printHTML(html);
-  }, [getSavedPrinterConfig]);
+      // 所有重试都失败
+      return false;
+    },
+    []
+  );
+
+  const printWithLanFallback = useCallback(
+    async (html: string) => {
+      if (!PrintModule?.printHTML) {
+        throw new Error('Print module is not available. Please restart the app.');
+      }
+
+      const savedPrinter = await getSavedPrinterConfig();
+      const canUseLan = !!savedPrinter?.host && !!PrintModule?.printToLANPrinter;
+
+      if (canUseLan) {
+        const port = Number(savedPrinter?.port) || 9100;
+        try {
+          const success = await printToLANWithRetry(html, savedPrinter!.host, port);
+          if (success) {
+            return; // LAN 打印成功
+          }
+        } catch (lanError) {
+          // 用户主动取消的情况
+          if (classifyPrintError(lanError) === 'USER_CANCELLED') {
+            throw lanError;
+          }
+        }
+
+        // LAN 打印失败，记录降级事件
+        logPrintFallback(
+          'LAN_FAILED',
+          savedPrinter?.host,
+          lastError || { message: 'Unknown error' }
+        );
+        Alert.alert(
+          'LAN Printer Unavailable',
+          'Using system print dialog (AirPrint) instead.'
+        );
+      }
+
+      // 使用系统打印（AirPrint）作为备选
+      await PrintModule.printHTML(html);
+    },
+    [getSavedPrinterConfig, printToLANWithRetry, logPrintFallback]
+  );
 
   const printReceipt = useCallback(async (printAllDiners: boolean = true) => {
     try {
@@ -167,14 +256,31 @@ export const usePrintReceipt = () => {
 
       if (Platform.OS === 'ios') {
         await printWithLanFallback(html);
+        // 成功提示
+        console.log('✅ Receipt printed successfully');
       } else {
         Alert.alert('Not Supported', 'Printing is currently only supported on iOS.');
       }
     } catch (error: any) {
-      console.error('❌ Print failed:', error);
-      Alert.alert('Print Error', error.message || 'Failed to print receipt.');
+      const errorType = classifyPrintError(error);
+      console.error('❌ Print failed:', { errorType, error });
+
+      // 不同错误类型的用户提示
+      const errorMessages: Record<string, string> = {
+        TIMEOUT: 'Printer connection timed out. Please check the printer and try again.',
+        CONNECTION_FAILED: 'Cannot connect to the configured printer. Please verify the IP address and network connection.',
+        DNS_RESOLUTION: 'Cannot resolve printer address. Please check the printer configuration.',
+        TRANSMISSION_ERROR: 'Error sending print data. The printer may have lost connection.',
+        USER_CANCELLED: 'Print cancelled.',
+        UNKNOWN: 'Failed to print receipt. Please try again.',
+      };
+
+      Alert.alert(
+        'Print Error',
+        errorMessages[errorType] || error.message || 'Failed to print receipt.'
+      );
     }
-  }, [buildReceiptHTML, printWithLanFallback]);
+  }, [buildReceiptHTML, printWithLanFallback, classifyPrintError]);
 
   const previewReceipt = useCallback(async (printAllDiners: boolean = true) => {
     try {
