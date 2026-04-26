@@ -47,8 +47,8 @@ class PrintModule: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
 
     DispatchQueue.global(qos: .userInitiated).async {
       do {
-        let escPosData = self.makeEscPosData(from: html)
-        try self.sendRawData(escPosData, host: host, port: UInt16(port))
+        let escPosData = PrintModule.makeEscPosData(from: html)
+        try PrintModule.sendRawData(escPosData, host: host, port: UInt16(port))
         DispatchQueue.main.async {
           resolve("LAN print completed")
         }
@@ -131,7 +131,6 @@ class PrintModule: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
       }
 
       let presentingVC = Self.topMostViewController(from: rootVC)
-
       let previewController = ReceiptPreviewController(html: html)
       let navigationController = UINavigationController(rootViewController: previewController)
       navigationController.modalPresentationStyle = .fullScreen
@@ -150,7 +149,7 @@ class PrintModule: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     return top
   }
 
-  private func makeEscPosData(from html: String) -> Data {
+  private static func makeEscPosData(from html: String) -> Data {
     let text = plainText(from: html)
     var bytes = Data([0x1B, 0x40]) // Initialize printer
     bytes.append(Data([0x1B, 0x61, 0x00])) // Left align
@@ -164,7 +163,7 @@ class PrintModule: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     return bytes
   }
 
-  private func plainText(from html: String) -> String {
+  private static func plainText(from html: String) -> String {
     var value = html
       .replacingOccurrences(of: "(?i)<br\\s*/?>", with: "\n", options: .regularExpression)
       .replacingOccurrences(of: "(?i)</p>", with: "\n", options: .regularExpression)
@@ -186,7 +185,7 @@ class PrintModule: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     return value.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
-  private func sendRawData(_ data: Data, host: String, port: UInt16) throws {
+  static func sendRawData(_ data: Data, host: String, port: UInt16) throws {
     var hints = addrinfo(
       ai_flags: AI_ADDRCONFIG,
       ai_family: AF_UNSPEC,
@@ -365,9 +364,7 @@ final class ReceiptPreviewController: UIViewController, WKNavigationDelegate {
   private let html: String
   private let webView = WKWebView(frame: .zero)
   private let actionContainer = UIView()
-  private let buttonStackView = UIStackView()
-  private let printButton = UIButton(type: .system)
-  private let cancelButton = UIButton(type: .system)
+  private let closeButton = UIButton(type: .system)
   private let activityIndicator = UIActivityIndicatorView(style: .large)
 
   init(html: String) {
@@ -401,26 +398,14 @@ final class ReceiptPreviewController: UIViewController, WKNavigationDelegate {
     actionContainer.layer.shadowRadius = 10
     actionContainer.layer.shadowOffset = CGSize(width: 0, height: -2)
 
-    printButton.setTitle("Print", for: .normal)
-    printButton.setTitleColor(.white, for: .normal)
-    printButton.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .semibold)
-    printButton.backgroundColor = UIColor(red: 1.0, green: 0.22, blue: 0.52, alpha: 1.0)
-    printButton.layer.cornerRadius = 12
-    printButton.contentEdgeInsets = UIEdgeInsets(top: 16, left: 24, bottom: 16, right: 24)
-    printButton.addTarget(self, action: #selector(handlePrint), for: .touchUpInside)
-
-    cancelButton.setTitle("Cancel", for: .normal)
-    cancelButton.setTitleColor(UIColor(red: 0.11, green: 0.20, blue: 0.34, alpha: 1.0), for: .normal)
-    cancelButton.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .semibold)
-    cancelButton.backgroundColor = UIColor(red: 0.93, green: 0.95, blue: 0.98, alpha: 1.0)
-    cancelButton.layer.cornerRadius = 12
-    cancelButton.contentEdgeInsets = UIEdgeInsets(top: 16, left: 24, bottom: 16, right: 24)
-    cancelButton.addTarget(self, action: #selector(handleClose), for: .touchUpInside)
-
-    buttonStackView.translatesAutoresizingMaskIntoConstraints = false
-    buttonStackView.axis = .horizontal
-    buttonStackView.spacing = 14
-    buttonStackView.distribution = .fillEqually
+    closeButton.translatesAutoresizingMaskIntoConstraints = false
+    closeButton.setTitle("Close", for: .normal)
+    closeButton.setTitleColor(.white, for: .normal)
+    closeButton.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .semibold)
+    closeButton.backgroundColor = UIColor(red: 0.11, green: 0.20, blue: 0.34, alpha: 1.0)
+    closeButton.layer.cornerRadius = 12
+    closeButton.contentEdgeInsets = UIEdgeInsets(top: 16, left: 24, bottom: 16, right: 24)
+    closeButton.addTarget(self, action: #selector(handleClose), for: .touchUpInside)
 
     activityIndicator.translatesAutoresizingMaskIntoConstraints = false
     activityIndicator.hidesWhenStopped = true
@@ -428,9 +413,7 @@ final class ReceiptPreviewController: UIViewController, WKNavigationDelegate {
     view.addSubview(webView)
     view.addSubview(actionContainer)
     view.addSubview(activityIndicator)
-    actionContainer.addSubview(buttonStackView)
-    buttonStackView.addArrangedSubview(cancelButton)
-    buttonStackView.addArrangedSubview(printButton)
+    actionContainer.addSubview(closeButton)
 
     let safeArea = view.safeAreaLayoutGuide
     NSLayoutConstraint.activate([
@@ -443,20 +426,18 @@ final class ReceiptPreviewController: UIViewController, WKNavigationDelegate {
       actionContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
       actionContainer.bottomAnchor.constraint(equalTo: safeArea.bottomAnchor),
 
-      buttonStackView.topAnchor.constraint(equalTo: actionContainer.topAnchor, constant: 10),
-      buttonStackView.leadingAnchor.constraint(equalTo: actionContainer.leadingAnchor, constant: 20),
-      buttonStackView.trailingAnchor.constraint(equalTo: actionContainer.trailingAnchor, constant: -20),
-      buttonStackView.bottomAnchor.constraint(equalTo: actionContainer.bottomAnchor, constant: -10),
-      buttonStackView.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
+      closeButton.topAnchor.constraint(equalTo: actionContainer.topAnchor, constant: 10),
+      closeButton.leadingAnchor.constraint(equalTo: actionContainer.leadingAnchor, constant: 20),
+      closeButton.trailingAnchor.constraint(equalTo: actionContainer.trailingAnchor, constant: -20),
+      closeButton.bottomAnchor.constraint(equalTo: actionContainer.bottomAnchor, constant: -10),
+      closeButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
 
       activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
       activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
     ])
 
     activityIndicator.startAnimating()
-    cancelButton.isEnabled = true
-    printButton.isEnabled = false
-    printButton.alpha = 0.6
+    closeButton.isEnabled = true
   }
 
   @objc
@@ -464,25 +445,8 @@ final class ReceiptPreviewController: UIViewController, WKNavigationDelegate {
     dismiss(animated: true)
   }
 
-  @objc
-  private func handlePrint() {
-    let printController = UIPrintInteractionController.shared
-    let printInfo = UIPrintInfo(dictionary: nil)
-    printInfo.outputType = .general
-    printInfo.jobName = "eMenu Receipt"
-    printController.printInfo = printInfo
-
-    let formatter = UIMarkupTextPrintFormatter(markupText: html)
-    formatter.perPageContentInsets = UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
-    printController.printFormatter = formatter
-
-    printController.present(animated: true, completionHandler: nil)
-  }
-
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     activityIndicator.stopAnimating()
-    printButton.isEnabled = true
-    printButton.alpha = 1
   }
 
   func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
